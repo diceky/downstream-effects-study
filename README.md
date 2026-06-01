@@ -27,7 +27,7 @@ The browser never talks to Supabase directly.
    SUPABASE_URL=...
    SUPABASE_SERVICE_ROLE_KEY=...
    GEMINI_API_KEY=...        # optional. Without it, ai-generate returns a stub.
-   GEMINI_MODEL=gemini-2.0-flash   # optional override
+   GEMINI_MODEL=gemini-2.5-flash   # optional override
    ADMIN_PASSWORD=...        # required to access /admin
    ```
 

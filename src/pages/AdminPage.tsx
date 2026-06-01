@@ -1,14 +1,31 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { adminCall, getAdminPassword, setAdminPassword } from "../lib/adminClient";
 import Icon from "../components/Icon";
+import MarkdownRenderer from "../components/MarkdownRenderer";
 
 const REFLECTION_SLOTS = 12;
+
+const DEFAULT_ACTIVITY_TITLES: string[] = [
+  "Gemini/Google AI Studioをひとまず触ってみる",
+  "会話に潜む認知バイアスを意識してみよう！",
+  "AIのアウトプットを裏取りしてみよう！",
+  "AIコールセンターに電話してみよう！",
+  "褒めるAIと厳しいAI、どっちがいい？",
+  "答えが欲しい？問いかけが欲しい？",
+  "理想的なクレーム対応を完全再現してみよう！",
+  "組織の独自情報を組み込んでみよう！",
+  "身の回りの困りごとを解消するアプリを作ってみよう！",
+  "自分ならこう読ませる！",
+  "理想のAIお問い合わせ窓口をゼロから組んでみよう！",
+  "ラスト・フリカエリ",
+];
 
 type Condition = "human_only" | "ai_mediated";
 
 interface WriterRow {
   writer_id: string;
   email: string;
+  name: string | null;
   condition: Condition;
   status: string;
   program_overview_pdf_url: string | null;
@@ -32,6 +49,7 @@ interface MemoRow {
   writer_id: string;
   condition: string;
   submitted_at: string | null;
+  final_memo_text: string | null;
 }
 
 interface ReflectionEntry {
@@ -43,6 +61,7 @@ interface ReflectionEntry {
 interface WriterDraft {
   writer_id: string;
   email: string;
+  name: string;
   condition: Condition;
   program_overview_pdf_url: string;
   reflections: { title: string; text: string }[];
@@ -52,17 +71,20 @@ interface ReaderDraft {
   reader_id: string;
   email: string;
   assigned_memo_id: string;
-  assigned_writer_id: string;
 }
 
 function emptyReflections() {
-  return Array.from({ length: REFLECTION_SLOTS }, () => ({ title: "", text: "" }));
+  return Array.from({ length: REFLECTION_SLOTS }, (_, i) => ({
+    title: DEFAULT_ACTIVITY_TITLES[i] ?? "",
+    text: "",
+  }));
 }
 
 function emptyWriterDraft(): WriterDraft {
   return {
     writer_id: "",
     email: "",
+    name: "",
     condition: "human_only",
     program_overview_pdf_url: "",
     reflections: emptyReflections(),
@@ -74,7 +96,6 @@ function emptyReaderDraft(): ReaderDraft {
     reader_id: "",
     email: "",
     assigned_memo_id: "",
-    assigned_writer_id: "",
   };
 }
 
@@ -82,7 +103,7 @@ function reflectionsToDraft(json: ReflectionEntry[] | null): { title: string; te
   const slots = emptyReflections();
   if (!Array.isArray(json)) return slots;
   for (const entry of json) {
-    const idx = (entry.activity_number ?? 0) - 1;
+    const idx = entry.activity_number ?? -1;
     if (idx >= 0 && idx < REFLECTION_SLOTS) {
       slots[idx] = { title: entry.title ?? "", text: entry.text ?? "" };
     }
@@ -95,7 +116,7 @@ function reflectionsFromDraft(slots: { title: string; text: string }[]): Reflect
   slots.forEach((slot, i) => {
     if (slot.title.trim() || slot.text.trim()) {
       out.push({
-        activity_number: i + 1,
+        activity_number: i,
         title: slot.title.trim(),
         text: slot.text.trim(),
       });
@@ -145,6 +166,16 @@ export default function AdminPage() {
 
   type Tab = "writers" | "readers" | "memos";
   const [tab, setTab] = useState<Tab>("writers");
+  const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set());
+
+  const toggleMemoExpanded = (memoId: string) => {
+    setExpandedMemos((prev) => {
+      const next = new Set(prev);
+      if (next.has(memoId)) next.delete(memoId);
+      else next.add(memoId);
+      return next;
+    });
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -178,11 +209,6 @@ export default function AdminPage() {
       })),
     [memos]
   );
-  const writerIdOptions = useMemo(
-    () => writers.map((w) => w.writer_id),
-    [writers]
-  );
-
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setPwError(null);
@@ -208,6 +234,7 @@ export default function AdminPage() {
     setWriterDraft({
       writer_id: w.writer_id,
       email: w.email,
+      name: w.name ?? "",
       condition: w.condition,
       program_overview_pdf_url: w.program_overview_pdf_url ?? "",
       reflections: reflectionsToDraft(w.reflections_json),
@@ -230,6 +257,7 @@ export default function AdminPage() {
       await adminCall("upsert_writer", {
         writer_id: writerDraft.writer_id.trim(),
         email: writerDraft.email.trim(),
+        name: writerDraft.name.trim() || null,
         condition: writerDraft.condition,
         program_overview_pdf_url: writerDraft.program_overview_pdf_url.trim() || null,
         reflections_json: reflectionsFromDraft(writerDraft.reflections),
@@ -267,7 +295,6 @@ export default function AdminPage() {
       reader_id: r.reader_id,
       email: r.email,
       assigned_memo_id: r.assigned_memo_id,
-      assigned_writer_id: r.assigned_writer_id,
     });
     setStatus(null);
     setError(null);
@@ -284,11 +311,16 @@ export default function AdminPage() {
     setStatus(null);
     setLoading(true);
     try {
+      const memoId = readerDraft.assigned_memo_id.trim();
+      const memo = memos.find((m) => m.memo_id === memoId);
+      if (!memo) {
+        throw new Error("指定されたmemo_idが見つかりません。");
+      }
       await adminCall("upsert_reader", {
         reader_id: readerDraft.reader_id.trim(),
         email: readerDraft.email.trim(),
-        assigned_memo_id: readerDraft.assigned_memo_id.trim(),
-        assigned_writer_id: readerDraft.assigned_writer_id.trim(),
+        assigned_memo_id: memoId,
+        assigned_writer_id: memo.writer_id,
       });
       setStatus(editingReaderId ? "Readerを更新しました。" : "Readerを追加しました。");
       cancelReaderEdit();
@@ -407,6 +439,7 @@ export default function AdminPage() {
             <tr>
               <th style={cellStyle}>writer_id</th>
               <th style={cellStyle}>email</th>
+              <th style={cellStyle}>name</th>
               <th style={cellStyle}>condition</th>
               <th style={cellStyle}>status</th>
               <th style={cellStyle}>PDF URL</th>
@@ -419,6 +452,7 @@ export default function AdminPage() {
               <tr key={w.writer_id}>
                 <td style={cellStyle}>{w.writer_id}</td>
                 <td style={cellStyle}>{w.email}</td>
+                <td style={cellStyle}>{w.name ?? "—"}</td>
                 <td style={cellStyle}>{w.condition}</td>
                 <td style={cellStyle}>{w.status}</td>
                 <td style={cellStyle} title={w.program_overview_pdf_url ?? ""}>
@@ -445,7 +479,7 @@ export default function AdminPage() {
             ))}
             {writers.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={7}>
+                <td style={cellStyle} colSpan={8}>
                   Writerは登録されていません。
                 </td>
               </tr>
@@ -478,6 +512,15 @@ export default function AdminPage() {
                 value={writerDraft.email}
                 onChange={(e) => setWriterDraft({ ...writerDraft, email: e.target.value })}
                 required
+                style={{ width: "100%", padding: 6 }}
+              />
+            </label>
+            <label>
+              name
+              <input
+                type="text"
+                value={writerDraft.name}
+                onChange={(e) => setWriterDraft({ ...writerDraft, name: e.target.value })}
                 style={{ width: "100%", padding: 6 }}
               />
             </label>
@@ -524,7 +567,7 @@ export default function AdminPage() {
                 key={i}
                 style={{ border: "1px solid #eee", padding: 8, borderRadius: 4 }}
               >
-                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Activity {i + 1}</div>
+                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Activity {i}</div>
                 <input
                   type="text"
                   placeholder="タイトル"
@@ -674,24 +717,6 @@ export default function AdminPage() {
                 ))}
               </datalist>
             </label>
-            <label>
-              assigned_writer_id
-              <input
-                type="text"
-                list="writer-options"
-                value={readerDraft.assigned_writer_id}
-                onChange={(e) =>
-                  setReaderDraft({ ...readerDraft, assigned_writer_id: e.target.value })
-                }
-                required
-                style={{ width: "100%", padding: 6 }}
-              />
-              <datalist id="writer-options">
-                {writerIdOptions.map((w) => (
-                  <option key={w} value={w} />
-                ))}
-              </datalist>
-            </label>
           </div>
 
           <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
@@ -720,20 +745,64 @@ export default function AdminPage() {
               <th style={cellStyle}>writer_id</th>
               <th style={cellStyle}>condition</th>
               <th style={cellStyle}>submitted_at</th>
+              <th style={cellStyle}>content</th>
             </tr>
           </thead>
           <tbody>
-            {memos.map((m) => (
-              <tr key={m.memo_id}>
-                <td style={cellStyle}>{m.memo_id}</td>
-                <td style={cellStyle}>{m.writer_id}</td>
-                <td style={cellStyle}>{m.condition}</td>
-                <td style={cellStyle}>{m.submitted_at ?? "—"}</td>
-              </tr>
-            ))}
+            {memos.map((m) => {
+              const isOpen = expandedMemos.has(m.memo_id);
+              return (
+                <Fragment key={m.memo_id}>
+                  <tr>
+                    <td style={cellStyle}>{m.memo_id}</td>
+                    <td style={cellStyle}>{m.writer_id}</td>
+                    <td style={cellStyle}>{m.condition}</td>
+                    <td style={cellStyle}>{m.submitted_at ?? "—"}</td>
+                    <td style={cellStyle}>
+                      {m.final_memo_text ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleMemoExpanded(m.memo_id)}
+                          style={{
+                            padding: "4px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 4,
+                            background: "#fff",
+                            cursor: "pointer",
+                            fontSize: 13,
+                          }}
+                        >
+                          {isOpen ? "隠す" : "表示"}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#9ca3af" }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                  {isOpen && m.final_memo_text && (
+                    <tr>
+                      <td style={cellStyle} colSpan={5}>
+                        <div
+                          style={{
+                            background: "#f8fafc",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            padding: 16,
+                            maxHeight: 480,
+                            overflowY: "auto",
+                          }}
+                        >
+                          <MarkdownRenderer source={m.final_memo_text} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
             {memos.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={4}>
+                <td style={cellStyle} colSpan={5}>
                   Memoはまだありません。
                 </td>
               </tr>

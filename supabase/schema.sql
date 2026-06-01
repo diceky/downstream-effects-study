@@ -7,6 +7,7 @@ create table if not exists writers (
   id uuid primary key default gen_random_uuid(),
   writer_id text unique not null,
   email text unique not null,
+  name text,
   condition text not null check (condition in ('human_only', 'ai_mediated')),
   status text not null default 'not_started' check (status in ('not_started','started','completed')),
 

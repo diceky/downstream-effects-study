@@ -16,9 +16,9 @@ export default function EmailEntry({ onSubmit, loading, error }: Props) {
 
   return (
     <form onSubmit={handle} style={{ maxWidth: 480 }}>
-      <p>研究タスクを開始するため、会社のメールアドレスを入力してください。</p>
+      <p>研究タスクを開始するため、エクレクトのメールアドレスを入力してください。</p>
       <label htmlFor="email" style={{ display: "block", marginTop: 12 }}>
-        会社のメールアドレス
+        エクレクトのメールアドレス
       </label>
       <input
         id="email"

@@ -19,6 +19,8 @@ interface ImmediateLookup {
   assigned_writer_id: string;
   status: string;
   memo_text: string;
+  writer_name: string | null;
+  writer_email: string | null;
 }
 
 interface DelayedLookup {
@@ -38,6 +40,7 @@ type LookupResp = ImmediateLookup | DelayedLookup | CompletedLookup;
 type Step =
   | "email"
   | "consent"
+  | "immediate_intro"
   | "reading"
   | "immediate_survey"
   | "immediate_thanks"
@@ -54,6 +57,8 @@ export default function ReaderPage() {
 
   const [readerId, setReaderId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState<string>("");
+  const [writerName, setWriterName] = useState<string | null>(null);
+  const [writerEmail, setWriterEmail] = useState<string | null>(null);
   const [readingStartedAt, setReadingStartedAt] = useState<number | null>(null);
   const readingEndedAtRef = useRef<number | null>(null);
 
@@ -66,6 +71,10 @@ export default function ReaderPage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [step]);
+
   const lookup = useCallback(async (email: string) => {
     setError(null);
     setLoading(true);
@@ -74,6 +83,8 @@ export default function ReaderPage() {
       if (data.route === "immediate") {
         setReaderId(data.reader_id);
         setMemoText(data.memo_text);
+        setWriterName(data.writer_name);
+        setWriterEmail(data.writer_email);
         setStep("consent");
       } else if (data.route === "delayed") {
         setReaderId(data.reader_id);
@@ -104,8 +115,7 @@ export default function ReaderPage() {
         reader_id: readerId,
         consent_version: CONSENT_VERSION,
       });
-      setReadingStartedAt(Date.now());
-      setStep("reading");
+      setStep("immediate_intro");
     } catch (e: any) {
       setError(e?.message ?? "送信中にエラーが発生しました。");
     } finally {
@@ -164,8 +174,10 @@ export default function ReaderPage() {
   );
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <h1>メモ閲覧タスク</h1>
+    <div style={{ padding: "56px 24px 32px", maxWidth: 900, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 16, fontWeight: 500, color: "#6b7280", margin: "0 0 24px" }}>
+        メモ閲覧タスク
+      </h1>
 
       {step === "email" && <EmailEntry onSubmit={lookup} loading={loading} error={error} />}
 
@@ -173,19 +185,51 @@ export default function ReaderPage() {
         <ConsentScreen role="reader" onConsent={consent} loading={loading} error={error} />
       )}
 
-      {step === "reading" && (
-        <div>
-          <p style={{ whiteSpace: "pre-wrap" }}>
-            {`これから、同じ部署の同僚が作成した1ページのメモを読んでいただきます。
+      {step === "immediate_intro" && (
+        <div
+          style={{
+            maxWidth: 760,
+            fontSize: 16,
+            lineHeight: 1.8,
+            color: "#1f2937",
+          }}
+        >
+          <h2 style={{ fontSize: 28, marginBottom: 24 }}>メモ閲覧タスクの説明</h2>
 
-この同僚は社内のAI研修プログラムに参加し、その主な学びをチームメンバーに共有するためにこのメモを作成しました。
-
-メモをよく読んでください。メモは最大5分間表示されます。その後、メモの内容について、あなたの理解や解釈に関する質問に回答していただきます。質問に回答している間は、メモを再表示することはできません。
-
-これはテストではなく、正解・不正解はありません。あなたが理解・解釈した内容に基づいて、できる範囲で回答してください。`}
+          <p style={{ marginBottom: 24 }}>
+            本タスクでは、あなたと同じ部署の同僚が作成した短いメモを読んでいただきます。この同僚は社内のAIプロトタイピングプログラムに参加した直後で、その主な学びをチームメンバーに共有するためにメモを作成しました。本インターフェース上でメモを閲覧していただきます。
+          </p>
+          <p style={{ marginBottom: 24 }}>
+            メモは最大5分間表示されます。その間に、メモをよく読んでください。読み終えた段階で先に進んでいただいて構いませんが、メモを閲覧できるのは最長5分間です。5分が経過した後、メモの内容に関するいくつかの質問に回答していただきます。質問に回答している間は、メモを見ることはできません。
+          </p>
+          <p style={{ marginBottom: 32 }}>
+            これはテストではなく、正解・不正解も特にありません。あなたの理解・解釈に基づいて回答してください。
           </p>
 
-          <div style={{ marginTop: 12 }}>
+          <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>本タスクにおける注意事項</h3>
+          <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
+            <li style={{ marginBottom: 8 }}>他者と相談・会話せず、個人で実施してください。</li>
+            <li style={{ marginBottom: 8 }}>ノートPCまたはデスクトップPCを使用し、途中で中断せず一気に進めることを推奨します。</li>
+            <li style={{ marginBottom: 8 }}>外部のAIツールやウェブサイトを使用しないでください。</li>
+          </ul>
+
+          {error && <p style={{ color: "crimson", marginBottom: 16 }}>{error}</p>}
+          <button
+            type="button"
+            onClick={() => {
+              setReadingStartedAt(Date.now());
+              setStep("reading");
+            }}
+            style={{ padding: "12px 24px", fontSize: 16 }}
+          >
+            メモを読み始める
+          </button>
+        </div>
+      )}
+
+      {step === "reading" && (
+        <div>
+          <div style={{ marginBottom: 12 }}>
             <Timer
               startedAt={readingStartedAt}
               durationSeconds={READING_DURATION_SECONDS}
@@ -203,6 +247,22 @@ export default function ReaderPage() {
               background: "var(--color-bg)",
             }}
           >
+            {(writerName || writerEmail) && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  paddingBottom: 12,
+                  borderBottom: "1px solid #e5e7eb",
+                  fontSize: 14,
+                  color: "#6b7280",
+                }}
+              >
+                <div style={{ fontWeight: 600, color: "#1f2937" }}>
+                  {writerName ?? "(名前未登録)"}
+                </div>
+                {writerEmail && <div>{writerEmail}</div>}
+              </div>
+            )}
             <MarkdownRenderer source={memoText} />
           </div>
 
@@ -222,36 +282,50 @@ export default function ReaderPage() {
 
       {step === "immediate_thanks" && (
         <div>
-          <h2>ありがとうございました</h2>
+          <h2>ご協力ありがとうございました！</h2>
           <p style={{ whiteSpace: "pre-wrap" }}>
             {`第1回のタスクは完了しました。
 
-約2週間後に、短いフォローアップアンケートへの回答をお願いする予定です。フォローアップアンケートでは、今回読んだメモについて覚えている内容や、その後の考え方・業務への影響についてお聞きします。
+約2週間後に、短いフォローアップアンケートへの回答をご案内させて頂きます。
 
-メモを無理に覚えておく必要はありません。本研究では、自然な職場での理解や記憶を調べています。
-
-ご協力ありがとうございました。`}
+引き続きご協力のほど、よろしくお願いいたします。`}
           </p>
         </div>
       )}
 
       {step === "delayed_not_available" && (
-        <p>フォローアップアンケートはまだ開始できません。指定された時期以降に再度アクセスしてください。</p>
+        <p>フォローアップアンケートはまだ開始できません。研究管理者からフォローアップについての連絡が来てから再度アクセスをお願い致します。</p>
       )}
 
       {step === "delayed_intro" && (
-        <div>
-          <p style={{ whiteSpace: "pre-wrap" }}>
-            {`フォローアップアンケートに戻っていただきありがとうございます。
+        <div
+          style={{
+            maxWidth: 760,
+            fontSize: 16,
+            lineHeight: 1.8,
+            color: "#1f2937",
+          }}
+        >
+          <h2 style={{ fontSize: 28, marginBottom: 24 }}>フォローアップアンケートの説明</h2>
 
-このアンケートでは、以前読んだメモについて現在覚えている内容や、そのメモがあなたの考え方や業務に影響したかどうかについてお聞きします。
-
-メモは再表示されません。覚えている範囲で回答してください。`}
+          <p style={{ marginBottom: 24 }}>
+            本タスクでは、2週間前に読んでいただいた同僚のメモに関するいくつかの質問に回答していただきます。質問に回答している間、元のメモを見ることはできません。
           </p>
+          <p style={{ marginBottom: 32 }}>
+            これはテストではなく、正解・不正解はありません。あなたの理解・解釈に基づいて、できる範囲で回答してください。
+          </p>
+
+          <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>本タスクにおける注意事項</h3>
+          <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
+            <li style={{ marginBottom: 8 }}>他者と相談・会話せず、個人で実施してください。</li>
+            <li style={{ marginBottom: 8 }}>ノートPCまたはデスクトップPCを使用し、途中で中断せず一気に進めることを推奨します。</li>
+            <li style={{ marginBottom: 8 }}>外部のAIツールやウェブサイトを使用しないでください。</li>
+          </ul>
+
           <button
             type="button"
             onClick={() => setStep("delayed_survey")}
-            style={{ marginTop: 12, padding: "8px 16px" }}
+            style={{ padding: "12px 24px", fontSize: 16 }}
           >
             フォローアップアンケートを開始する
           </button>
@@ -264,11 +338,11 @@ export default function ReaderPage() {
 
       {step === "delayed_thanks" && (
         <div>
-          <h2>ありがとうございました</h2>
+          <h2>ご協力ありがとうございました！</h2>
           <p style={{ whiteSpace: "pre-wrap" }}>
-            {`フォローアップアンケートは完了しました。
+            {`回答は正常に送信されました。
 
-ご協力ありがとうございました。回答は正常に送信されました。`}
+これでメモ閲覧タスクは完了となります。全ての結果がで揃い次第、分析結果をレポートさせて頂きます。`}
           </p>
         </div>
       )}

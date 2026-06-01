@@ -11,6 +11,7 @@ interface Body {
 const WRITER_FIELDS = [
   "writer_id",
   "email",
+  "name",
   "condition",
   "program_overview_pdf_url",
   "reflections_json",
@@ -61,7 +62,7 @@ export const handler: Handler = async (event) => {
           supabase
             .from("writers")
             .select(
-              "writer_id, email, condition, status, program_overview_pdf_url, reflections_json, created_at"
+              "writer_id, email, name, condition, status, program_overview_pdf_url, reflections_json, created_at"
             )
             .order("created_at", { ascending: true }),
           supabase
@@ -72,7 +73,7 @@ export const handler: Handler = async (event) => {
             .order("created_at", { ascending: true }),
           supabase
             .from("memos")
-            .select("memo_id, writer_id, condition, submitted_at")
+            .select("memo_id, writer_id, condition, submitted_at, final_memo_text")
             .order("submitted_at", { ascending: false }),
         ]);
         if (writersRes.error) throw writersRes.error;

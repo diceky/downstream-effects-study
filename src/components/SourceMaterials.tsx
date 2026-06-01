@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Icon from "./Icon";
 
 export interface Reflection {
   activity_number?: number | string;
@@ -39,8 +40,7 @@ export default function SourceMaterials({
       <p>以下の資料を参考にしてメモを作成してください。すべての資料を必ず使う必要はありません。</p>
 
       <section style={{ marginTop: 12 }}>
-        <h4>Program Overview PDF</h4>
-        <p>AI Prototyping Programの全体概要をまとめたPDFです。</p>
+        <h4>プログラムの概要PDF</h4>
         {pdfUrl ? (
           <a href={pdfUrl} target="_blank" rel="noreferrer">
             <button type="button">PDFを表示する</button>
@@ -77,35 +77,53 @@ export default function SourceMaterials({
         )}
       </section>
 
-      <section style={{ marginTop: 16 }}>
+      <hr style={{ border: 0, borderTop: "1px solid #e5e7eb", margin: "24px 0" }} />
+
+      <section>
         <h4>あなたのプログラム中の振り返り</h4>
-        <p>
-          AI Prototyping
-          Programの各アクティビティであなたが記入した振り返りです。メモに含める内容を考える際の参考として使用してください。
-        </p>
         {condition === "ai_mediated" && (
           <p style={{ fontSize: 13, color: "#444" }}>
-            AIはこれらの振り返りテキストには自動ではアクセスできません。AIに使わせたい内容がある場合は、必要な部分をコピーしてプロンプトに貼り付けるか、ご自身で要約して入力してください。
+            AIに使わせたい内容がある場合は、必要な部分をプロンプトにコピペするか、ご自身で要約してご利用ください。
           </p>
         )}
         {reflections.length === 0 && <em>振り返りは登録されていません。</em>}
         {reflections.map((r, i) => (
           <div
             key={i}
-            style={{ border: "1px solid #ddd", padding: 8, marginTop: 8, borderRadius: 4 }}
+            style={{
+              position: "relative",
+              border: "1px solid #e5e7eb",
+              background: "#f8fafc",
+              padding: 12,
+              paddingRight: 40,
+              marginTop: 8,
+              borderRadius: 6,
+            }}
           >
+            <button
+              type="button"
+              onClick={() => copy(r.text ?? "", i)}
+              title="振り返りをコピー"
+              aria-label="振り返りをコピー"
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                background: "transparent",
+                border: "none",
+                padding: 4,
+                cursor: "pointer",
+                color: copiedIndex === i ? "#16a34a" : "#6b7280",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              <Icon name={copiedIndex === i ? "check" : "content_copy"} size={18} />
+            </button>
             <div style={{ fontWeight: "bold" }}>
               Activity {r.activity_number ?? i + 1}: {r.title ?? ""}
             </div>
             <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{r.text ?? ""}</div>
-            <button
-              type="button"
-              style={{ marginTop: 6 }}
-              onClick={() => copy(r.text ?? "", i)}
-            >
-              振り返りをコピー
-            </button>
-            {copiedIndex === i && <span style={{ marginLeft: 8 }}>コピーしました。</span>}
           </div>
         ))}
       </section>

@@ -43,6 +43,11 @@ export const handler: Handler = async (event) => {
     if (memoErr || !memo) {
       return jsonResponse(500, { error: "メモを読み込めませんでした。研究担当者までご連絡ください。" });
     }
+    const { data: writer } = await supabase
+      .from("writers")
+      .select("name, email")
+      .eq("writer_id", reader.assigned_writer_id)
+      .maybeSingle();
     return jsonResponse(200, {
       route: "immediate",
       reader_id: reader.reader_id,
@@ -50,6 +55,8 @@ export const handler: Handler = async (event) => {
       assigned_writer_id: reader.assigned_writer_id,
       status: reader.status,
       memo_text: memo.final_memo_text,
+      writer_name: writer?.name ?? null,
+      writer_email: writer?.email ?? null,
     });
   }
 

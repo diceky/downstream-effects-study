@@ -33,7 +33,15 @@ export default function Timer({ startedAt, durationSeconds, label = "残り時�
   }, [remaining === 0]);
 
   return (
-    <div style={{ padding: 8, background: "#f3f3f3", display: "inline-block", borderRadius: 4 }}>
+    <div
+      style={{
+        padding: "12px 16px",
+        background: "#f3f3f3",
+        display: "inline-block",
+        borderRadius: 6,
+        fontSize: 24,
+      }}
+    >
       <strong>{label}:</strong> {format(remaining)}
     </div>
   );

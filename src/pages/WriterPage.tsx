@@ -215,7 +215,6 @@ export default function WriterPage() {
       return;
     }
     setError(null);
-    setAiResponse("");
     setAiLoading(true);
     const sentPrompt = aiPrompt;
     try {
@@ -472,13 +471,35 @@ export default function WriterPage() {
             )}
             {timeExpired && (
               <p style={{ color: "crimson", margin: 0 }}>
-                作成時間が終了しました。現在の内容を確認し、メモを提出してください。
+                作成時間が終了しました。メモを提出してください。
               </p>
             )}
           </div>
 
           {writer.condition === "ai_mediated" && writingPhase === "ai_prompt" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, alignItems: "start" }}>
+              <div>
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: "12px 16px",
+                    background: "#f8fafc",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 6,
+                    fontSize: 14,
+                    lineHeight: 1.7,
+                    color: "#374151",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                    メモに含めて頂きたいこと（必ずしもこの構成に沿う必要はありません）
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 20 }}>
+                    <li>プログラムを通した学び</li>
+                    <li>チームにとっての気付き</li>
+                    <li>今すぐにできること／変えられること</li>
+                  </ul>
+                </div>
               <section style={{ border: "1px solid #ddd", padding: 12, borderRadius: 4 }}>
                 {/* <h3>AIドラフト作成アシスタント</h3>
                 <p>
@@ -501,7 +522,7 @@ export default function WriterPage() {
                       checked={pdfAttached}
                       onChange={(e) => setPdfAttached(e.target.checked)}
                     />
-                    <span style={{ marginLeft: 6 }}>Program Overview PDFをAIへの依頼に添付する</span>
+                    <span style={{ marginLeft: 6 }}>プログラムの概要PDFをプロンプトに添付する</span>
                   </label>
                 </div>
                 <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -521,26 +542,8 @@ export default function WriterPage() {
                   </button>
                 </div>
                 {error && <p style={{ color: "crimson" }}>{error}</p>}
-                {aiLoading && !aiResponse && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      padding: 16,
-                      border: "1px dashed var(--color-border-strong)",
-                      borderRadius: "var(--radius-md)",
-                      background: "var(--color-surface-alt)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      color: "var(--color-text-muted)",
-                    }}
-                  >
-                    <Spinner size={18} />
-                    <span>AIがドラフトを作成しています。しばらくお待ちください。</span>
-                  </div>
-                )}
                 {aiResponse && (
-                  <div style={{ marginTop: 12 }}>
+                  <div style={{ marginTop: 12, opacity: aiLoading ? 0.5 : 1, transition: "opacity 0.2s" }}>
                     <label>AI生成結果</label>
                     <MarkdownRenderer
                       source={aiResponse}
@@ -566,6 +569,7 @@ export default function WriterPage() {
                   </button>
                 </div>
               </section>
+              </div>
 
               <SourceMaterials
                 pdfUrl={writer.program_overview_pdf_url}
@@ -675,7 +679,7 @@ export default function WriterPage() {
                       justifyContent: "center",
                     }}
                   >
-                    AI生成をやめて手動修正に進む
+                    手動修正に進む
                   </button>
                   <button
                     type="button"

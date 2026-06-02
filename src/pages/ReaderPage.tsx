@@ -61,6 +61,7 @@ export default function ReaderPage() {
   const [writerEmail, setWriterEmail] = useState<string | null>(null);
   const [readingStartedAt, setReadingStartedAt] = useState<number | null>(null);
   const readingEndedAtRef = useRef<number | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -260,7 +261,7 @@ export default function ReaderPage() {
                 <div style={{ fontWeight: 600, color: "#1f2937" }}>
                   {writerName ?? "(名前未登録)"}
                 </div>
-                {writerEmail && <div>{writerEmail}</div>}
+                {/* {writerEmail && <div>{writerEmail}</div>} */}
               </div>
             )}
             <MarkdownRenderer source={memoText} />
@@ -268,11 +269,70 @@ export default function ReaderPage() {
 
           <button
             type="button"
-            onClick={goToImmediateSurvey}
+            onClick={() => setShowLeaveConfirm(true)}
             style={{ marginTop: 16, padding: "8px 16px" }}
           >
             質問に進む
           </button>
+
+          {showLeaveConfirm && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 300,
+                padding: 16,
+              }}
+            >
+              <div
+                style={{
+                  background: "var(--color-bg)",
+                  borderRadius: "var(--radius-md)",
+                  padding: 24,
+                  maxWidth: 380,
+                  width: "100%",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+                }}
+              >
+                <p style={{ marginTop: 0, fontSize: 15, lineHeight: 1.7 }}>
+                  一度次の画面へ進むともうメモを見直すことはできません。次に進みますか？
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLeaveConfirm(false);
+                      goToImmediateSurvey();
+                    }}
+                    style={{
+                      background: "var(--color-danger, #dc2626)",
+                      color: "#fff",
+                      border: "1px solid var(--color-danger, #dc2626)",
+                      padding: "10px 16px",
+                      fontWeight: 600,
+                      textAlign: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    次へ進む
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowLeaveConfirm(false)}
+                    style={{ textAlign: "center", justifyContent: "center" }}
+                  >
+                    戻る
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

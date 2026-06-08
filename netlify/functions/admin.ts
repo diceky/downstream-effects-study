@@ -148,6 +148,8 @@ export const handler: Handler = async (event) => {
             task_started_at: null,
             task_ended_at: null,
             task_duration_seconds: null,
+            current_memo_id: null,
+            current_session_id: null,
             survey_answers_json: null,
             survey_submitted_at: null,
             updated_at: now,

@@ -13,7 +13,7 @@ export const handler: Handler = async (event) => {
   const { data, error } = await supabase
     .from("writers")
     .select(
-      "writer_id, condition, status, program_overview_pdf_url, reflections_json"
+      "writer_id, condition, status, program_overview_pdf_url, reflections_json, task_started_at, task_ended_at, current_memo_id, current_session_id"
     )
     .eq("email", normalised)
     .maybeSingle();
@@ -34,5 +34,9 @@ export const handler: Handler = async (event) => {
     status: data.status,
     program_overview_pdf_url: data.program_overview_pdf_url,
     reflections_json: data.reflections_json ?? [],
+    task_started_at: data.task_started_at ?? null,
+    task_ended_at: data.task_ended_at ?? null,
+    current_memo_id: data.current_memo_id ?? null,
+    current_session_id: data.current_session_id ?? null,
   });
 };

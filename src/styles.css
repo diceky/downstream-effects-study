@@ -262,6 +262,17 @@ hr {
   color: var(--color-text-muted);
 }
 
+.tiptap-editor .ProseMirror,
+.tiptap-editor.ProseMirror {
+  outline: none;
+}
+
+button.icon-btn.is-active {
+  background: var(--color-surface-alt);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
 .spinner {
   display: inline-block;
   box-sizing: border-box;

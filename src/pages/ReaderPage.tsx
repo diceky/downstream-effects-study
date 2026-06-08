@@ -64,13 +64,22 @@ export default function ReaderPage() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   useEffect(() => {
+    if (
+      step === "email" ||
+      step === "immediate_thanks" ||
+      step === "delayed_thanks" ||
+      step === "delayed_not_available" ||
+      step === "completed"
+    ) {
+      return;
+    }
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
       e.returnValue = "";
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
+  }, [step]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -259,7 +268,7 @@ export default function ReaderPage() {
                 }}
               >
                 <div style={{ fontWeight: 600, color: "#1f2937" }}>
-                  {writerName ?? "(名前未登録)"}
+                  メモ作成者：{writerName ?? "(名前未登録)"}
                 </div>
                 {/* {writerEmail && <div>{writerEmail}</div>} */}
               </div>
@@ -337,7 +346,12 @@ export default function ReaderPage() {
       )}
 
       {step === "immediate_survey" && (
-        <ReaderImmediateSurvey onSubmit={submitImmediate} loading={loading} error={error} />
+        <ReaderImmediateSurvey
+          onSubmit={submitImmediate}
+          loading={loading}
+          error={error}
+          writerName={writerName}
+        />
       )}
 
       {step === "immediate_thanks" && (
@@ -348,7 +362,7 @@ export default function ReaderPage() {
 
 約2週間後に、短いフォローアップアンケートへの回答をご案内させて頂きます。
 
-引き続きご協力のほど、よろしくお願いいたします。`}
+引き続きご協力のほど、よろしくお願いいたします。画面を閉じていただいて問題ありません。`}
           </p>
         </div>
       )}
@@ -402,7 +416,9 @@ export default function ReaderPage() {
           <p style={{ whiteSpace: "pre-wrap" }}>
             {`回答は正常に送信されました。
 
-これでメモ閲覧タスクは完了となります。全ての結果がで揃い次第、分析結果をレポートさせて頂きます。`}
+これでメモ閲覧タスクは完了となります。全ての結果がで揃い次第、分析結果をレポートさせて頂きます。
+
+画面を閉じていただいて問題ありません。`}
           </p>
         </div>
       )}

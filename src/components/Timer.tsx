@@ -22,15 +22,16 @@ export default function Timer({ startedAt, durationSeconds, label = "残り時�
     return () => clearInterval(id);
   }, [startedAt]);
 
-  if (!startedAt) return null;
-
-  const elapsed = Math.floor((now - startedAt) / 1000);
-  const remaining = Math.max(0, durationSeconds - elapsed);
+  const elapsed = startedAt ? Math.floor((now - startedAt) / 1000) : 0;
+  const remaining = startedAt ? Math.max(0, durationSeconds - elapsed) : durationSeconds;
+  const expired = !!startedAt && remaining === 0;
 
   useEffect(() => {
-    if (remaining === 0 && onExpire) onExpire();
+    if (expired && onExpire) onExpire();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remaining === 0]);
+  }, [expired]);
+
+  if (!startedAt) return null;
 
   return (
     <div

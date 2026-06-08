@@ -22,6 +22,12 @@ create table if not exists writers (
   task_ended_at timestamptz,
   task_duration_seconds integer,
 
+  -- Resume support: when a writer starts the writing phase we persist the
+  -- generated memo_id and session_id so a refresh/crash returns the same IDs
+  -- and the original task_started_at is preserved.
+  current_memo_id text,
+  current_session_id text,
+
   survey_answers_json jsonb,
   survey_submitted_at timestamptz,
 
@@ -100,3 +106,7 @@ create table if not exists word_diff_logs (
 
 create index if not exists word_diff_logs_writer_idx on word_diff_logs (writer_id);
 create index if not exists word_diff_logs_memo_idx on word_diff_logs (memo_id);
+
+-- Idempotent migrations for existing deployments.
+alter table writers add column if not exists current_memo_id text;
+alter table writers add column if not exists current_session_id text;

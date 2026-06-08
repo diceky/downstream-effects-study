@@ -1,4 +1,8 @@
 import { useEffect, useRef } from "react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
+import { Markdown } from "tiptap-markdown";
 import Icon from "./Icon";
 
 interface Props {
@@ -11,36 +15,49 @@ interface Props {
 
 interface ToolbarAction {
   icon: string;
-  cmd: string;
   title: string;
+  run: (editor: Editor) => void;
+  isActive: (editor: Editor) => boolean;
 }
 
 const ACTIONS: ToolbarAction[] = [
-  { icon: "format_bold", cmd: "bold", title: "太字 (Ctrl+B)" },
-  { icon: "format_italic", cmd: "italic", title: "斜体 (Ctrl+I)" },
-  { icon: "format_strikethrough", cmd: "strikeThrough", title: "取り消し線" },
-  { icon: "format_underlined", cmd: "underline", title: "下線 (Ctrl+U)" },
-  { icon: "format_list_bulleted", cmd: "insertUnorderedList", title: "箇条書き" },
-  { icon: "format_list_numbered", cmd: "insertOrderedList", title: "番号付きリスト" },
+  {
+    icon: "format_bold",
+    title: "太字 (Ctrl+B)",
+    run: (e) => e.chain().focus().toggleBold().run(),
+    isActive: (e) => e.isActive("bold"),
+  },
+  {
+    icon: "format_italic",
+    title: "斜体 (Ctrl+I)",
+    run: (e) => e.chain().focus().toggleItalic().run(),
+    isActive: (e) => e.isActive("italic"),
+  },
+  {
+    icon: "format_strikethrough",
+    title: "取り消し線",
+    run: (e) => e.chain().focus().toggleStrike().run(),
+    isActive: (e) => e.isActive("strike"),
+  },
+  {
+    icon: "format_underlined",
+    title: "下線 (Ctrl+U)",
+    run: (e) => e.chain().focus().toggleUnderline().run(),
+    isActive: (e) => e.isActive("underline"),
+  },
+  {
+    icon: "format_list_bulleted",
+    title: "箇条書き",
+    run: (e) => e.chain().focus().toggleBulletList().run(),
+    isActive: (e) => e.isActive("bulletList"),
+  },
+  {
+    icon: "format_list_numbered",
+    title: "番号付きリスト",
+    run: (e) => e.chain().focus().toggleOrderedList().run(),
+    isActive: (e) => e.isActive("orderedList"),
+  },
 ];
-
-const SHORTCUT_MAP: Record<string, string> = {
-  b: "bold",
-  i: "italic",
-  u: "underline",
-};
-
-function isEmptyHtml(html: string): boolean {
-  if (!html) return true;
-  const trimmed = html.replace(/\s+/g, "");
-  return (
-    trimmed === "" ||
-    trimmed === "<br>" ||
-    trimmed === "<p></p>" ||
-    trimmed === "<p><br></p>" ||
-    trimmed === "<div><br></div>"
-  );
-}
 
 export default function MarkdownEditor({
   value,
@@ -49,48 +66,49 @@ export default function MarkdownEditor({
   placeholder,
   minHeight = 320,
 }: Props) {
-  const editorRef = useRef<HTMLDivElement>(null);
+  const lastEmittedRef = useRef<string>(value || "");
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Markdown.configure({
+        html: false,
+        breaks: true,
+        linkify: false,
+        transformPastedText: true,
+        transformCopiedText: true,
+      }),
+    ],
+    content: value || "",
+    editable: !disabled,
+    editorProps: {
+      attributes: {
+        class: "markdown-preview tiptap-editor",
+        style: `min-height: ${minHeight}px; padding: 12px; outline: none;`,
+      },
+    },
+    onUpdate: ({ editor }) => {
+      const md = (editor.storage as any).markdown.getMarkdown() as string;
+      lastEmittedRef.current = md;
+      onChange(md);
+    },
+  });
 
   useEffect(() => {
-    const el = editorRef.current;
-    if (!el) return;
-    if (el.innerHTML !== value) {
-      el.innerHTML = value || "";
+    if (!editor) return;
+    editor.setEditable(!disabled);
+  }, [editor, disabled]);
+
+  useEffect(() => {
+    if (!editor) return;
+    if (value !== lastEmittedRef.current) {
+      lastEmittedRef.current = value || "";
+      editor.commands.setContent(value || "", { emitUpdate: false });
     }
-  }, [value]);
+  }, [editor, value]);
 
-  function emitChange() {
-    const el = editorRef.current;
-    if (el) onChange(el.innerHTML);
-  }
-
-  function runCmd(cmd: string) {
-    if (disabled) return;
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
-    document.execCommand(cmd, false);
-    emitChange();
-  }
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (!(e.metaKey || e.ctrlKey)) return;
-    const cmd = SHORTCUT_MAP[e.key.toLowerCase()];
-    if (cmd) {
-      e.preventDefault();
-      runCmd(cmd);
-    }
-  }
-
-  function onPaste(e: React.ClipboardEvent<HTMLDivElement>) {
-    // Insert as plain text so unexpected styles/formatting don't leak in.
-    e.preventDefault();
-    const text = e.clipboardData.getData("text/plain");
-    document.execCommand("insertText", false, text);
-    emitChange();
-  }
-
-  const showPlaceholder = isEmptyHtml(value) && !!placeholder;
+  const showPlaceholder = !!editor && editor.isEmpty && !!placeholder;
 
   return (
     <div
@@ -111,20 +129,23 @@ export default function MarkdownEditor({
           background: "var(--color-surface-alt)",
         }}
       >
-        {ACTIONS.map((a) => (
-          <button
-            key={a.cmd}
-            type="button"
-            title={a.title}
-            onMouseDown={(e) => e.preventDefault() /* keep editor focus */}
-            onClick={() => runCmd(a.cmd)}
-            disabled={disabled}
-            className="icon-btn"
-            style={{ padding: "4px 8px" }}
-          >
-            <Icon name={a.icon} size={18} />
-          </button>
-        ))}
+        {ACTIONS.map((a) => {
+          const active = !!editor && a.isActive(editor);
+          return (
+            <button
+              key={a.icon}
+              type="button"
+              title={a.title}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor && a.run(editor)}
+              disabled={disabled || !editor}
+              className={`icon-btn${active ? " is-active" : ""}`}
+              style={{ padding: "4px 8px" }}
+            >
+              <Icon name={a.icon} size={18} />
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ position: "relative" }}>
@@ -145,27 +166,8 @@ export default function MarkdownEditor({
             {placeholder}
           </div>
         )}
-        <div
-          ref={editorRef}
-          contentEditable={!disabled}
-          suppressContentEditableWarning
-          onInput={emitChange}
-          onBlur={emitChange}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-          className="markdown-preview"
-          style={{
-            minHeight,
-            padding: 12,
-            outline: "none",
-            lineHeight: 1.7,
-            fontSize: "0.95rem",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        />
+        <EditorContent editor={editor} />
       </div>
     </div>
   );
 }
-

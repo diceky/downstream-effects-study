@@ -4,6 +4,7 @@ interface Props {
   onSubmit: (answers: Record<string, unknown>) => Promise<void> | void;
   loading?: boolean;
   error?: string | null;
+  writerName?: string | null;
 }
 
 function Likert({
@@ -66,7 +67,7 @@ function Likert({
   );
 }
 
-export default function ReaderImmediateSurvey({ onSubmit, loading, error }: Props) {
+export default function ReaderImmediateSurvey({ onSubmit, loading, error, writerName }: Props) {
   const [mainPoint, setMainPoint] = useState("");
   const [relevance, setRelevance] = useState("");
   const [teamAwareness, setTeamAwareness] = useState("");
@@ -180,13 +181,17 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error }: Prop
       />
       <Likert
         name="closeness"
-        label="普段、メモの作成者と近い関係で仕事をしている。"
+        label={`普段、メモの作成者${
+          writerName ? `（${writerName}）` : ""
+        }と近い関係で仕事をしている。`}
         value={closeness}
         onChange={setCloseness}
       />
       <Likert
         name="author_influence"
-        label="メモの作成者からの情報は普段から自分の業務に大きな影響がある。"
+        label={`メモの作成者${
+          writerName ? `（${writerName}）` : ""
+        }からの情報は普段から自分の業務に大きな影響がある。`}
         value={authorInfluence}
         onChange={setAuthorInfluence}
       />

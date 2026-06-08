@@ -9,20 +9,6 @@ import MarkdownRenderer from "../components/MarkdownRenderer";
 import Spinner from "../components/Spinner";
 import { apiPost } from "../lib/apiClient";
 import { createWordDiffLogger, WordDiffLogger } from "../lib/wordDiffLogger";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
-
-function markdownToSafeHtml(src: string): string {
-  const raw = marked.parse(src || "", { async: false }) as string;
-  return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS: [
-      "p", "br", "strong", "b", "em", "i", "s", "strike", "del", "u",
-      "ul", "ol", "li",
-      "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "code", "pre", "hr", "a",
-    ],
-    ALLOWED_ATTR: ["href", "title", "target", "rel"],
-  });
-}
 
 const CONSENT_VERSION = "v1_mvp";
 const TASK_DURATION_SECONDS = 15 * 60;
@@ -47,6 +33,10 @@ interface WriterLookup {
   status: "not_started" | "started" | "completed";
   program_overview_pdf_url: string | null;
   reflections_json: Reflection[];
+  task_started_at: string | null;
+  task_ended_at: string | null;
+  current_memo_id: string | null;
+  current_session_id: string | null;
 }
 
 export default function WriterPage() {
@@ -62,6 +52,7 @@ export default function WriterPage() {
   const [writingPhase, setWritingPhase] = useState<WritingPhase | null>(null);
   const [phaseStartedAt, setPhaseStartedAt] = useState<number | null>(null);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
+  const [resumed, setResumed] = useState(false);
 
   // text surfaces
   const [finalMemo, setFinalMemo] = useState("");
@@ -138,13 +129,16 @@ export default function WriterPage() {
   }, [logger]);
 
   useEffect(() => {
+    if (step === "email" || step === "thanks" || step === "already_completed") {
+      return;
+    }
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
       e.returnValue = "";
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
+  }, [step]);
 
   const lookup = useCallback(async (email: string) => {
     setError(null);
@@ -154,6 +148,50 @@ export default function WriterPage() {
       setWriter(data);
       if (data.status === "completed") {
         setStep("already_completed");
+      } else if (
+        data.status === "started" &&
+        data.task_ended_at
+      ) {
+        // Memo was already submitted but survey hasn't been completed yet.
+        // Resume directly at the post-memo screen so a re-submit can't
+        // overwrite the existing memos row with empty text.
+        setMemoId(data.current_memo_id);
+        setStep("memo_submitted");
+      } else if (
+        data.status === "started" &&
+        data.task_started_at &&
+        data.current_memo_id &&
+        data.current_session_id
+      ) {
+        // Resume: jump straight into the writing step with the persisted ids,
+        // honouring the original task_started_at so the timer reflects real
+        // elapsed time rather than restarting.
+        const startedAtMs = new Date(data.task_started_at).getTime();
+        const elapsedSec = Math.floor((Date.now() - startedAtMs) / 1000);
+        setMemoId(data.current_memo_id);
+        setSessionId(data.current_session_id);
+        setTaskStartedAt(startedAtMs);
+        if (data.condition === "ai_mediated") {
+          if (elapsedSec >= AI_PHASE_DURATION_SECONDS) {
+            setWritingPhase("manual_edit");
+            setPhaseStartedAt(startedAtMs + AI_PHASE_DURATION_SECONDS * 1000);
+            setTimeExpired(elapsedSec >= TASK_DURATION_SECONDS);
+          } else {
+            setWritingPhase("ai_prompt");
+            setPhaseStartedAt(startedAtMs);
+            setTimeExpired(false);
+          }
+        } else {
+          setWritingPhase("manual_edit");
+          setPhaseStartedAt(startedAtMs);
+          setTimeExpired(elapsedSec >= TASK_DURATION_SECONDS);
+        }
+        logger.resetBaseline("final_memo_editor", "");
+        logger.resetBaseline("ai_prompt", "");
+        logger.resetBaseline("ai_response", "");
+        logger.enable();
+        setResumed(true);
+        setStep("writing");
       } else {
         setStep("consent");
       }
@@ -162,7 +200,7 @@ export default function WriterPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [logger]);
 
   const consent = useCallback(async () => {
     if (!writer) return;
@@ -186,20 +224,26 @@ export default function WriterPage() {
     setError(null);
     setLoading(true);
     try {
-      const data = await apiPost<{ memo_id: string; session_id: string }>("writer-start", {
+      const data = await apiPost<{
+        memo_id: string;
+        session_id: string;
+        task_started_at: string;
+        resumed: boolean;
+      }>("writer-start", {
         writer_id: writer.writer_id,
       });
       setMemoId(data.memo_id);
       setSessionId(data.session_id);
-      const now = Date.now();
-      setTaskStartedAt(now);
-      setPhaseStartedAt(now);
+      const startedAtMs = new Date(data.task_started_at).getTime();
+      setTaskStartedAt(startedAtMs);
+      setPhaseStartedAt(startedAtMs);
       setTimeExpired(false);
       setWritingPhase(writer.condition === "ai_mediated" ? "ai_prompt" : "manual_edit");
       logger.resetBaseline("final_memo_editor", "");
       logger.resetBaseline("ai_prompt", "");
       logger.resetBaseline("ai_response", "");
       logger.enable();
+      setResumed(!!data.resumed);
       setStep("writing");
     } catch (e: any) {
       setError(e?.message ?? "送信中にエラーが発生しました。");
@@ -254,11 +298,10 @@ export default function WriterPage() {
     (reason: "timer" | "user") => {
       setShowSwitchConfirm(false);
       if (writingPhase !== "ai_prompt") return;
-      const seedHtml = aiResponse ? markdownToSafeHtml(aiResponse) : "";
-      if (seedHtml) {
-        setFinalMemo(seedHtml);
+      if (aiResponse) {
+        setFinalMemo(aiResponse);
         logger.onChange({
-          newValue: seedHtml,
+          newValue: aiResponse,
           source: "ai",
           surfaceKey: "final_memo_editor",
           location: "memo_editor",
@@ -438,6 +481,37 @@ export default function WriterPage() {
 
       {step === "writing" && writer && (
         <div>
+          {resumed && (
+            <div
+              role="status"
+              style={{
+                marginBottom: 12,
+                padding: "10px 14px",
+                background: "#fef3c7",
+                border: "1px solid #fcd34d",
+                borderRadius: "var(--radius-md)",
+                color: "#7c2d12",
+                fontSize: 14,
+                lineHeight: 1.6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <span>
+                以前の続きから再開します。タイマーは最初にタスクを開始した時点から継続しているため、執筆中だった内容は復元されません。残り時間を確認のうえ、引き続きメモを作成してください。
+              </span>
+              <button
+                type="button"
+                onClick={() => setResumed(false)}
+                className="icon-btn"
+                style={{ padding: "4px 10px", fontSize: 12 }}
+              >
+                閉じる
+              </button>
+            </div>
+          )}
           <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             {writer.condition === "ai_mediated" && writingPhase === "ai_prompt" && (
               <>
@@ -448,6 +522,20 @@ export default function WriterPage() {
                   label="AI生成フェーズ 残り時間"
                   onExpire={() => transitionToManualEdit("timer")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowSwitchConfirm(true)}
+                  disabled={aiLoading}
+                  style={{
+                    background: "var(--color-danger, #dc2626)",
+                    color: "#fff",
+                    border: "1px solid var(--color-danger, #dc2626)",
+                    padding: "6px 12px",
+                    fontWeight: 600,
+                  }}
+                >
+                  次へ進む
+                </button>
                 <span style={{ fontSize: 13, color: "#6b7280" }}>
                   10分経過後、自動的に手動修正フェーズに移ります。
                 </span>
@@ -558,16 +646,6 @@ export default function WriterPage() {
                     />
                   </div>
                 )}
-                <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowSwitchConfirm(true)}
-                    disabled={aiLoading}
-                    style={{ padding: "6px 12px" }}
-                  >
-                    次へ進む
-                  </button>
-                </div>
               </section>
               </div>
 
@@ -663,7 +741,7 @@ export default function WriterPage() {
                 }}
               >
                 <p style={{ marginTop: 0, fontSize: 15, lineHeight: 1.7 }}>
-                  一度手動モードに進むとAI生成に戻ることはできません。
+                  一度手動修正モードに進むとAI生成に戻ることはできません。(生成内容は自動的に引き継がれます)
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <button
@@ -723,7 +801,9 @@ export default function WriterPage() {
           <p style={{ whiteSpace: "pre-wrap" }}>
             {`回答は正常に送信されました。
 
-これでメモ作成タスクは完了となります。全ての結果がで揃い次第、分析結果をレポートさせて頂きます。`}
+これでメモ作成タスクは完了となります。全ての結果がで揃い次第、分析結果をレポートさせて頂きます。
+
+画面を閉じていただいて問題ありません。`}
           </p>
         </div>
       )}

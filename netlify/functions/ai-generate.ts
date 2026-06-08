@@ -111,7 +111,15 @@ async function callAi(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
         contents,
-        generationConfig: { temperature: 0.7 },
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.95,
+          topK: 64,
+          candidateCount: 1,
+          maxOutputTokens: 2048,
+          responseMimeType: "text/plain",
+          thinkingConfig: { thinkingBudget: 1024 },
+        },
       }),
     });
   } catch (e) {

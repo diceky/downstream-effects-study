@@ -22,7 +22,8 @@ export const handler: Handler = async (event) => {
       immediate_started_at: now,
       updated_at: now,
     })
-    .eq("reader_id", reader_id);
+    .eq("reader_id", reader_id)
+    .is("consent_given", false);
   if (error) {
     return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
   }

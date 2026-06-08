@@ -27,7 +27,7 @@ export const handler: Handler = async (event) => {
   const supabase = getSupabase();
   const now = new Date();
   const delayedFrom = new Date(now.getTime() + FOURTEEN_DAYS_MS);
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("readers")
     .update({
       reading_started_at: reading_started_at ?? null,
@@ -39,9 +39,16 @@ export const handler: Handler = async (event) => {
       status: "started",
       updated_at: now.toISOString(),
     })
-    .eq("reader_id", reader_id);
+    .eq("reader_id", reader_id)
+    .is("immediate_submitted_at", null)
+    .select("reader_id");
   if (error) {
     return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
+  }
+  if (!updated || updated.length === 0) {
+    // Already submitted previously — treat as a no-op success so the client can move on
+    // without resetting the 14-day delayed window.
+    return jsonResponse(200, { ok: true, already_submitted: true });
   }
   return jsonResponse(200, { ok: true });
 };

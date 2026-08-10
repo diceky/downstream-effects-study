@@ -21,6 +21,7 @@ interface ImmediateLookup {
   memo_text: string;
   writer_name: string | null;
   writer_email: string | null;
+  pis_signed_url: string | null;
 }
 
 interface DelayedLookup {
@@ -59,6 +60,7 @@ export default function ReaderPage() {
   const [memoText, setMemoText] = useState<string>("");
   const [writerName, setWriterName] = useState<string | null>(null);
   const [writerEmail, setWriterEmail] = useState<string | null>(null);
+  const [pisUrl, setPisUrl] = useState<string | null>(null);
   const [readingStartedAt, setReadingStartedAt] = useState<number | null>(null);
   const readingEndedAtRef = useRef<number | null>(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -95,6 +97,7 @@ export default function ReaderPage() {
         setMemoText(data.memo_text);
         setWriterName(data.writer_name);
         setWriterEmail(data.writer_email);
+        setPisUrl(data.pis_signed_url);
         setStep("consent");
       } else if (data.route === "delayed") {
         setReaderId(data.reader_id);
@@ -192,7 +195,7 @@ export default function ReaderPage() {
       {step === "email" && <EmailEntry onSubmit={lookup} loading={loading} error={error} />}
 
       {step === "consent" && (
-        <ConsentScreen role="reader" onConsent={consent} loading={loading} error={error} />
+        <ConsentScreen role="reader" pisUrl={pisUrl} onConsent={consent} loading={loading} error={error} />
       )}
 
       {step === "immediate_intro" && (
@@ -207,7 +210,7 @@ export default function ReaderPage() {
           <h2 style={{ fontSize: 28, marginBottom: 24 }}>メモ閲覧タスクの説明</h2>
 
           <p style={{ marginBottom: 24 }}>
-            本タスクでは、あなたと同じ部署の同僚が作成した短いメモを読んでいただきます。この同僚は社内のAIプロトタイピングプログラムに参加した直後で、その主な学びをチームメンバーに共有するためにメモを作成しました。本インターフェース上でメモを閲覧していただきます。
+            本タスクでは、あなたと同じ部署の同僚が作成した短いメモを読んでいただきます。この同僚は社内のAIプロトタイピングプログラムに参加し、その主な学びをチームメンバーに共有するためにメモを作成しました。本インターフェース上でメモを閲覧していただきます。
           </p>
           <p style={{ marginBottom: 24 }}>
             メモは最大5分間表示されます。その間に、メモをよく読んでください。読み終えた段階で先に進んでいただいて構いませんが、メモを閲覧できるのは最長5分間です。5分が経過した後、メモの内容に関するいくつかの質問に回答していただきます。質問に回答している間は、メモを見ることはできません。

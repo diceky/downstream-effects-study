@@ -1,5 +1,13 @@
 import type { Handler } from "@netlify/functions";
-import { getSupabase, jsonResponse, methodNotAllowed, normaliseEmail, parseBody } from "./_supabase";
+import {
+  getSupabase,
+  jsonResponse,
+  methodNotAllowed,
+  normaliseEmail,
+  parseBody,
+  signStudyMaterialUrl,
+  READER_PIS_PATH,
+} from "./_supabase";
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return methodNotAllowed();
@@ -57,6 +65,7 @@ export const handler: Handler = async (event) => {
       memo_text: memo.final_memo_text,
       writer_name: writer?.name ?? null,
       writer_email: writer?.email ?? null,
+      pis_signed_url: await signStudyMaterialUrl(READER_PIS_PATH),
     });
   }
 

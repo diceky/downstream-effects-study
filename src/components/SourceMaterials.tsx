@@ -1,10 +1,17 @@
 import { useState } from "react";
+import { emojify } from "node-emoji";
 import Icon from "./Icon";
+import MarkdownRenderer from "./MarkdownRenderer";
 
 export interface Reflection {
   activity_number?: number | string;
   title?: string;
   text?: string;
+}
+
+function renderShortcodes(text: string): string {
+  // Leave unknown shortcodes (e.g. Slack custom emoji) as-is instead of stripping them.
+  return emojify(text, { fallback: (name) => `:${name}:` });
 }
 
 interface Props {
@@ -23,6 +30,7 @@ export default function SourceMaterials({
   onTogglePdfAttachment,
 }: Props) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [openIndices, setOpenIndices] = useState<Set<number>>(new Set());
 
   const copy = async (text: string, i: number) => {
     try {
@@ -32,6 +40,15 @@ export default function SourceMaterials({
     } catch {
       /* ignore */
     }
+  };
+
+  const toggleOpen = (i: number) => {
+    setOpenIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
   };
 
   return (
@@ -80,45 +97,82 @@ export default function SourceMaterials({
           </p>
         )}
         {reflections.length === 0 && <em>振り返りは登録されていません。</em>}
-        {reflections.map((r, i) => (
-          <div
-            key={i}
-            style={{
-              position: "relative",
-              border: "1px solid #e5e7eb",
-              background: "#f8fafc",
-              padding: 12,
-              paddingRight: 40,
-              marginTop: 8,
-              borderRadius: 6,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => copy(r.text ?? "", i)}
-              title="振り返りをコピー"
-              aria-label="振り返りをコピー"
+        {reflections.map((r, i) => {
+          const isOpen = openIndices.has(i);
+          const heading = renderShortcodes(
+            `Activity ${r.activity_number ?? i + 1}: ${r.title ?? ""}`
+          );
+          const rawText = r.text ?? "";
+          const emojifiedText = renderShortcodes(rawText);
+          const clipboardText = `${heading}\n\n${emojifiedText}`;
+          return (
+            <div
+              key={i}
               style={{
-                position: "absolute",
-                top: 8,
-                right: 8,
-                background: "transparent",
-                border: "none",
-                padding: 4,
-                cursor: "pointer",
-                color: copiedIndex === i ? "#16a34a" : "#6b7280",
-                display: "inline-flex",
-                alignItems: "center",
+                position: "relative",
+                border: "1px solid #e5e7eb",
+                background: "#f8fafc",
+                marginTop: 8,
+                borderRadius: 6,
+                overflow: "hidden",
               }}
             >
-              <Icon name={copiedIndex === i ? "check" : "content_copy"} size={18} />
-            </button>
-            <div style={{ fontWeight: "bold" }}>
-              Activity {r.activity_number ?? i + 1}: {r.title ?? ""}
+              <button
+                type="button"
+                onClick={() => toggleOpen(i)}
+                aria-expanded={isOpen}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "transparent",
+                  border: "none",
+                  padding: "10px 44px 10px 12px",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  color: "inherit",
+                }}
+              >
+                <Icon name={isOpen ? "expand_more" : "chevron_right"} size={18} />
+                <span style={{ flex: 1 }}>{heading}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copy(clipboardText, i);
+                }}
+                title="振り返りをコピー"
+                aria-label="振り返りをコピー"
+                style={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  background: "transparent",
+                  border: "none",
+                  padding: 4,
+                  cursor: "pointer",
+                  color: copiedIndex === i ? "#16a34a" : "#6b7280",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <Icon name={copiedIndex === i ? "check" : "content_copy"} size={18} />
+              </button>
+              {isOpen && (
+                <MarkdownRenderer
+                  source={emojifiedText}
+                  style={{
+                    padding: "12px",
+                    borderTop: "1px solid #e5e7eb",
+                  }}
+                />
+              )}
             </div>
-            <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{r.text ?? ""}</div>
-          </div>
-        ))}
+          );
+        })}
       </section>
     </aside>
   );

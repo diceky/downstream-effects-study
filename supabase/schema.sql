@@ -8,7 +8,7 @@ create table if not exists writers (
   writer_id text unique not null,
   email text unique not null,
   name text,
-  condition text not null check (condition in ('human_only', 'ai_mediated')),
+  condition text check (condition in ('human_only', 'ai_mediated')),
   status text not null default 'not_started' check (status in ('not_started','started','completed')),
 
   consent_given boolean default false,
@@ -110,3 +110,6 @@ create index if not exists word_diff_logs_memo_idx on word_diff_logs (memo_id);
 -- Idempotent migrations for existing deployments.
 alter table writers add column if not exists current_memo_id text;
 alter table writers add column if not exists current_session_id text;
+
+-- Condition is now assigned randomly on first writer-lookup; allow nulls until then.
+alter table writers alter column condition drop not null;

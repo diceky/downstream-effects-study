@@ -1,5 +1,15 @@
 import type { Handler } from "@netlify/functions";
-import { getSupabase, jsonResponse, methodNotAllowed, normaliseEmail, parseBody } from "./_supabase";
+import {
+  getSupabase,
+  jsonResponse,
+  methodNotAllowed,
+  normaliseEmail,
+  parseBody,
+  signStudyMaterialUrl,
+  WRITER_PIS_PATH,
+} from "./_supabase";
+
+type Condition = "human_only" | "ai_mediated";
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return methodNotAllowed();
@@ -28,11 +38,46 @@ export const handler: Handler = async (event) => {
     });
   }
 
+  let condition: Condition | null = (data.condition as Condition | null) ?? null;
+
+  // First login: randomly assign condition (50/50). Guarded so a concurrent
+  // duplicate lookup can't overwrite an already-assigned value.
+  if (!condition) {
+    const picked: Condition = Math.random() < 0.5 ? "human_only" : "ai_mediated";
+    const { data: updated, error: updateErr } = await supabase
+      .from("writers")
+      .update({ condition: picked, updated_at: new Date().toISOString() })
+      .eq("writer_id", data.writer_id)
+      .is("condition", null)
+      .select("condition")
+      .maybeSingle();
+
+    if (updateErr) {
+      return jsonResponse(500, { error: "送信中にエラーが発生しました。時間をおいて再度お試しください。" });
+    }
+
+    if (updated?.condition) {
+      condition = updated.condition as Condition;
+    } else {
+      // Lost the race with a concurrent request; re-read the persisted value.
+      const { data: refetched, error: refetchErr } = await supabase
+        .from("writers")
+        .select("condition")
+        .eq("writer_id", data.writer_id)
+        .maybeSingle();
+      if (refetchErr || !refetched?.condition) {
+        return jsonResponse(500, { error: "送信中にエラーが発生しました。時間をおいて再度お試しください。" });
+      }
+      condition = refetched.condition as Condition;
+    }
+  }
+
   return jsonResponse(200, {
     writer_id: data.writer_id,
-    condition: data.condition,
+    condition,
     status: data.status,
-    program_overview_pdf_url: data.program_overview_pdf_url,
+    program_overview_pdf_url: await signStudyMaterialUrl(data.program_overview_pdf_url),
+    pis_signed_url: await signStudyMaterialUrl(WRITER_PIS_PATH),
     reflections_json: data.reflections_json ?? [],
     task_started_at: data.task_started_at ?? null,
     task_ended_at: data.task_ended_at ?? null,

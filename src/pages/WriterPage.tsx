@@ -32,6 +32,7 @@ interface WriterLookup {
   condition: "human_only" | "ai_mediated";
   status: "not_started" | "started" | "completed";
   program_overview_pdf_url: string | null;
+  pis_signed_url: string | null;
   reflections_json: Reflection[];
   task_started_at: string | null;
   task_ended_at: string | null;
@@ -407,7 +408,14 @@ export default function WriterPage() {
       )}
 
       {step === "consent" && writer && (
-        <ConsentScreen role="writer" condition={writer.condition} onConsent={consent} loading={loading} error={error} />
+        <ConsentScreen
+          role="writer"
+          condition={writer.condition}
+          pisUrl={writer.pis_signed_url}
+          onConsent={consent}
+          loading={loading}
+          error={error}
+        />
       )}
 
       {step === "intro" && writer && (

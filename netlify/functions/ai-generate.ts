@@ -1,5 +1,11 @@
-import type { Handler, HandlerEvent } from "@netlify/functions";
-import { getSupabase, jsonResponse, methodNotAllowed, parseBody } from "./_supabase";
+import type { Handler } from "@netlify/functions";
+import {
+  getSupabase,
+  jsonResponse,
+  methodNotAllowed,
+  parseBody,
+  signStudyMaterialUrl,
+} from "./_supabase";
 
 interface HistoryEntry {
   role?: "user" | "model";
@@ -20,23 +26,6 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
 const SYSTEM_INSTRUCTION =
   "あなたは社内のAI研修プログラムの学びをまとめる支援アシスタントです。日本語で簡潔なメモのドラフトを作成してください。";
-
-function resolveAbsoluteUrl(
-  maybeUrl: string,
-  event: HandlerEvent
-): string | null {
-  if (!maybeUrl) return null;
-  if (/^https?:\/\//i.test(maybeUrl)) return maybeUrl;
-  const envBase = process.env.URL || process.env.DEPLOY_URL;
-  if (envBase) {
-    return new URL(maybeUrl, envBase).toString();
-  }
-  const proto =
-    (event.headers["x-forwarded-proto"] as string | undefined) || "http";
-  const host = event.headers["host"];
-  if (!host) return null;
-  return new URL(maybeUrl, `${proto}://${host}`).toString();
-}
 
 async function fetchPdfAsBase64(
   pdfUrl: string
@@ -203,10 +192,10 @@ export const handler: Handler = async (event) => {
       .select("program_overview_pdf_url")
       .eq("writer_id", writer_id)
       .maybeSingle();
-    const rawUrl = writerRow?.program_overview_pdf_url as string | null;
-    const absUrl = rawUrl ? resolveAbsoluteUrl(rawUrl, event) : null;
-    if (absUrl) {
-      const fetched = await fetchPdfAsBase64(absUrl);
+    const rawPath = writerRow?.program_overview_pdf_url as string | null;
+    const signedUrl = await signStudyMaterialUrl(rawPath);
+    if (signedUrl) {
+      const fetched = await fetchPdfAsBase64(signedUrl);
       if (fetched) {
         pdfPart = { inlineData: fetched };
       } else {

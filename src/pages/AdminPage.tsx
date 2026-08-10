@@ -5,6 +5,15 @@ import MarkdownRenderer from "../components/MarkdownRenderer";
 
 const REFLECTION_SLOTS = 12;
 
+const PROGRAM_OVERVIEW_PDF_OPTIONS: string[] = [
+  "DHC01 - AI_Prototyping Program.pdf",
+  "DHC02 - AI_Prototyping Program.pdf",
+  "DHC03 - AI_Prototyping Program.pdf",
+  "DHC04 - AI_Prototyping Program.pdf",
+  "DHC05 - AI_Prototyping Program.pdf",
+  "DHC06 - AI_Prototyping Program.pdf",
+];
+
 const DEFAULT_ACTIVITY_TITLES: string[] = [
   "Gemini/Google AI Studioをひとまず触ってみる",
   "会話に潜む認知バイアスを意識してみよう！",
@@ -26,7 +35,7 @@ interface WriterRow {
   writer_id: string;
   email: string;
   name: string | null;
-  condition: Condition;
+  condition: Condition | null;
   status: string;
   program_overview_pdf_url: string | null;
   reflections_json: ReflectionEntry[] | null;
@@ -62,7 +71,6 @@ interface WriterDraft {
   writer_id: string;
   email: string;
   name: string;
-  condition: Condition;
   program_overview_pdf_url: string;
   reflections: { title: string; text: string }[];
 }
@@ -85,7 +93,6 @@ function emptyWriterDraft(): WriterDraft {
     writer_id: "",
     email: "",
     name: "",
-    condition: "human_only",
     program_overview_pdf_url: "",
     reflections: emptyReflections(),
   };
@@ -235,7 +242,6 @@ export default function AdminPage() {
       writer_id: w.writer_id,
       email: w.email,
       name: w.name ?? "",
-      condition: w.condition,
       program_overview_pdf_url: w.program_overview_pdf_url ?? "",
       reflections: reflectionsToDraft(w.reflections_json),
     });
@@ -258,7 +264,6 @@ export default function AdminPage() {
         writer_id: writerDraft.writer_id.trim(),
         email: writerDraft.email.trim(),
         name: writerDraft.name.trim() || null,
-        condition: writerDraft.condition,
         program_overview_pdf_url: writerDraft.program_overview_pdf_url.trim() || null,
         reflections_json: reflectionsFromDraft(writerDraft.reflections),
       });
@@ -453,7 +458,7 @@ export default function AdminPage() {
                 <td style={cellStyle}>{w.writer_id}</td>
                 <td style={cellStyle}>{w.email}</td>
                 <td style={cellStyle}>{w.name ?? "—"}</td>
-                <td style={cellStyle}>{w.condition}</td>
+                <td style={cellStyle}>{w.condition ?? "未割当"}</td>
                 <td style={cellStyle}>{w.status}</td>
                 <td style={cellStyle} title={w.program_overview_pdf_url ?? ""}>
                   {w.program_overview_pdf_url
@@ -525,25 +530,8 @@ export default function AdminPage() {
               />
             </label>
             <label>
-              condition
-              <select
-                value={writerDraft.condition}
-                onChange={(e) =>
-                  setWriterDraft({
-                    ...writerDraft,
-                    condition: e.target.value as Condition,
-                  })
-                }
-                style={{ width: "100%", padding: 6 }}
-              >
-                <option value="human_only">human_only</option>
-                <option value="ai_mediated">ai_mediated</option>
-              </select>
-            </label>
-            <label>
               program_overview_pdf_url
-              <input
-                type="text"
+              <select
                 value={writerDraft.program_overview_pdf_url}
                 onChange={(e) =>
                   setWriterDraft({
@@ -551,9 +539,15 @@ export default function AdminPage() {
                     program_overview_pdf_url: e.target.value,
                   })
                 }
-                placeholder="/program-overview.pdf など"
                 style={{ width: "100%", padding: 6 }}
-              />
+              >
+                <option value="">（未選択）</option>
+                {PROGRAM_OVERVIEW_PDF_OPTIONS.map((path) => (
+                  <option key={path} value={path}>
+                    {path}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 

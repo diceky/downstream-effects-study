@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 interface Props {
   role: "writer" | "reader";
   condition?: string;
+  pisUrl?: string | null;
   onConsent: () => Promise<void> | void;
   loading?: boolean;
   error?: string | null;
@@ -33,10 +34,11 @@ function getWriterItems(condition?: string): string[] {
   ];
 }
 
-export default function ConsentScreen({ role, condition, onConsent, loading, error }: Props) {
+export default function ConsentScreen({ role, condition, pisUrl, onConsent, loading, error }: Props) {
   const items = role === "writer" ? getWriterItems(condition) : READER_ITEMS;
   const [checked, setChecked] = useState<boolean[]>(() => items.map(() => false));
   const allChecked = useMemo(() => checked.every(Boolean), [checked]);
+  const pisHref = pisUrl ?? undefined;
 
   return (
     <div
@@ -81,7 +83,11 @@ export default function ConsentScreen({ role, condition, onConsent, loading, err
             より詳しい研究内容は、下記のParticipant Information Sheetに記載されています。必ず内容をご確認ください。
           </p>
           <p style={{ marginBottom: 24 }}>
-            <em>(Link to participant information sheet)</em>
+            {pisHref ? (
+              <a href={pisHref} target="_blank" rel="noopener noreferrer">Participant Information Sheet</a>
+            ) : (
+              <span style={{ color: "#6b7280" }}>Participant Information Sheet（読み込み中...）</span>
+            )}
           </p>
           <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>同意事項</h3>
           <p style={{ marginBottom: 16 }}>研究にご参加頂くためには、以下の全ての項目への同意が必要です。</p>
@@ -96,7 +102,7 @@ export default function ConsentScreen({ role, condition, onConsent, loading, err
             参加に同意いただいた場合、主なタスクは、2回の短いオンラインセッションへのご参加です。これらのセッションは非同期となり、ご自身の都合の良い時間に参加いただけます。
           </p>
           <p style={{ marginBottom: 24 }}>
-            第1セッションでは、同じ部署の同僚が作成した1ページのメモをお読みいただきます。同僚は社内のAIプロトタイピングプログラムに参加した直後で、チームメンバーに向けて主な学びをメモにまとめています。本インターフェース上で1ページのメモを読み、その後、そのメモに対する印象や解釈についてのアンケートにご回答いただきます。メモを読む際には、作成者が誰であるかが提示されます。第1セッションの所要時間は最大15分です。
+            第1セッションでは、同じ部署の同僚が作成した1ページのメモをお読みいただきます。この同僚は社内のAIプロトタイピングプログラムに参加し、チームメンバーに向けて主な学びをメモにまとめています。本インターフェース上で1ページのメモを読み、その後、そのメモに対する印象や解釈についてのアンケートにご回答いただきます。メモを読む際には、作成者が誰であるかが提示されます。第1セッションの所要時間は最大15分です。
           </p>
           <p style={{ marginBottom: 24 }}>
             第2セッションは第1セッションの2週間後に実施され、メモに関する短いフォローアップアンケートにご回答いただきます。第2セッションの所要時間は最大10分です。
@@ -111,7 +117,11 @@ export default function ConsentScreen({ role, condition, onConsent, loading, err
             より詳しい研究内容は、下記のParticipant Information Sheetに記載されています。必ず内容をご確認ください。
           </p>
           <p style={{ marginBottom: 24 }}>
-            <em>(Link to participant information sheet)</em>
+            {pisHref ? (
+              <a href={pisHref} target="_blank" rel="noopener noreferrer">Participant Information Sheet</a>
+            ) : (
+              <span style={{ color: "#6b7280" }}>Participant Information Sheet（読み込み中...）</span>
+            )}
           </p>
           <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>同意事項</h3>
           <p style={{ marginBottom: 16 }}>研究にご参加頂くためには、以下の全ての項目への同意が必要です。</p>

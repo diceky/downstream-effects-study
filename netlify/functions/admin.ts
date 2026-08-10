@@ -8,11 +8,11 @@ interface Body {
 
 // Whitelist of columns that can be set via admin endpoints.
 // Note: status is intentionally excluded — the app manages it.
+// condition is intentionally excluded — it is randomly assigned by writer-lookup on first login.
 const WRITER_FIELDS = [
   "writer_id",
   "email",
   "name",
-  "condition",
   "program_overview_pdf_url",
   "reflections_json",
 ];
@@ -88,13 +88,10 @@ export const handler: Handler = async (event) => {
 
       case "upsert_writer": {
         const data = pick(payload, WRITER_FIELDS);
-        if (!data.writer_id || !data.email || !data.condition) {
-          return jsonResponse(400, { error: "writer_id, email, condition are required" });
+        if (!data.writer_id || !data.email) {
+          return jsonResponse(400, { error: "writer_id, email are required" });
         }
         data.email = normaliseEmail(data.email);
-        if (!["human_only", "ai_mediated"].includes(data.condition)) {
-          return jsonResponse(400, { error: "condition must be human_only or ai_mediated" });
-        }
         data.updated_at = now;
         const { error } = await supabase
           .from("writers")

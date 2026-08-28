@@ -51,13 +51,13 @@ function Home() {
             /reader
           </span>
         </Link>
-        <Link to="/admin" style={linkRow}>
+        {/* <Link to="/admin" style={linkRow}>
           <Icon name="admin_panel_settings" size={22} />
           <span>管理画面</span>
           <span className="muted" style={{ marginLeft: "auto", fontSize: 13 }}>
             /admin
           </span>
-        </Link>
+        </Link> */}
       </div>
     </div>
   );

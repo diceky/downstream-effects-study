@@ -17,7 +17,7 @@ export async function apiPost<T>(endpoint: string, body: unknown): Promise<T> {
   const contentType = res.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
     throw new Error(
-      `送信中にエラーが発生しました（endpoint: ${endpoint}）。研究担当者までご連絡ください。`
+      `送信中にエラーが発生しました（endpoint: ${endpoint}）。研究担当者（Dice）までご連絡ください。`
     );
   }
 
@@ -29,7 +29,7 @@ export async function apiPost<T>(endpoint: string, body: unknown): Promise<T> {
   }
 
   if (!res.ok) {
-    throw new Error(data?.error || "送信中にエラーが発生しました。時間をおいて再度お試しください。問題が続く場合は、研究担当者までご連絡ください。");
+    throw new Error(data?.error || "送信中にエラーが発生しました。時間をおいて再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。");
   }
   return data as T;
 }

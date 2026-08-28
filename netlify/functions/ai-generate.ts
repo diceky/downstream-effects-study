@@ -62,7 +62,7 @@ async function callAi(
     return {
       ok: false,
       status: 503,
-      error: "AIサービスが利用できません。研究担当者までご連絡ください。",
+      error: "AIサービスが利用できません。研究担当者（Dice）までご連絡ください。",
     };
   }
 
@@ -184,15 +184,31 @@ export const handler: Handler = async (event) => {
 
   const supabase = getSupabase();
 
+  // Ownership + eligibility guard: the (writer_id, memo_id) pair must match this
+  // writer's active session, the writing task must not have ended, and only
+  // ai_mediated writers may invoke Gemini.
+  const { data: writerRow, error: lookupErr } = await supabase
+    .from("writers")
+    .select("condition, current_memo_id, task_ended_at, program_overview_pdf_url")
+    .eq("writer_id", writer_id)
+    .maybeSingle();
+  if (lookupErr) {
+    return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
+  }
+  if (!writerRow || writerRow.current_memo_id !== memo_id) {
+    return jsonResponse(403, { error: "セッションが一致しません。" });
+  }
+  if (writerRow.task_ended_at) {
+    return jsonResponse(409, { error: "タスクは既に終了しています。" });
+  }
+  if (writerRow.condition !== "ai_mediated") {
+    return jsonResponse(403, { error: "AIアシスタントはこの条件では利用できません。" });
+  }
+
   let pdfPart: GeminiPart | null = null;
   let pdfFetchFailed = false;
   if (pdf_attached) {
-    const { data: writerRow } = await supabase
-      .from("writers")
-      .select("program_overview_pdf_url")
-      .eq("writer_id", writer_id)
-      .maybeSingle();
-    const rawPath = writerRow?.program_overview_pdf_url as string | null;
+    const rawPath = writerRow.program_overview_pdf_url as string | null;
     const signedUrl = await signStudyMaterialUrl(rawPath);
     if (signedUrl) {
       const fetched = await fetchPdfAsBase64(signedUrl);

@@ -29,7 +29,7 @@ type Step =
 
 interface WriterLookup {
   writer_id: string;
-  condition: "human_only" | "ai_mediated";
+  condition: "human_only" | "ai_mediated" | null;
   status: "not_started" | "started" | "completed";
   program_overview_pdf_url: string | null;
   pis_signed_url: string | null;
@@ -71,6 +71,7 @@ export default function WriterPage() {
   const finalMemoRef = useRef("");
   const aiPromptRef = useRef("");
   const aiResponseRef = useRef("");
+  const aiPromptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     finalMemoRef.current = finalMemo;
   }, [finalMemo]);
@@ -80,6 +81,13 @@ export default function WriterPage() {
   useEffect(() => {
     aiResponseRef.current = aiResponse;
   }, [aiResponse]);
+
+  useEffect(() => {
+    const el = aiPromptTextareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [aiPrompt, writingPhase, step]);
 
   const writerRef = useRef(writer);
   const memoIdRef = useRef(memoId);
@@ -105,7 +113,7 @@ export default function WriterPage() {
         const w = writerRef.current;
         const m = memoIdRef.current;
         const s = sessionIdRef.current;
-        if (!w || !m || !s) return null;
+        if (!w || !m || !s || !w.condition) return null;
         return { session_id: s, writer_id: w.writer_id, memo_id: m, condition: w.condition };
       },
       getCurrentValueForSurface: (key) => {
@@ -208,10 +216,14 @@ export default function WriterPage() {
     setError(null);
     setLoading(true);
     try {
-      await apiPost("writer-consent", {
-        writer_id: writer.writer_id,
-        consent_version: CONSENT_VERSION,
-      });
+      const data = await apiPost<{ ok: true; condition: "human_only" | "ai_mediated" }>(
+        "writer-consent",
+        {
+          writer_id: writer.writer_id,
+          consent_version: CONSENT_VERSION,
+        }
+      );
+      setWriter((prev) => (prev ? { ...prev, condition: data.condition } : prev));
       setStep("intro");
     } catch (e: any) {
       setError(e?.message ?? "送信中にエラーが発生しました。");
@@ -362,7 +374,6 @@ export default function WriterPage() {
       await apiPost("writer-submit-memo", {
         writer_id: writer.writer_id,
         memo_id: memoId,
-        condition: writer.condition,
         final_memo_text: finalMemo,
         task_duration_seconds: duration,
       });
@@ -396,7 +407,7 @@ export default function WriterPage() {
   );
 
   return (
-    <div style={{ padding: "56px 24px 32px", maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ padding: "56px 24px 32px", maxWidth: 1200, margin: "0 auto" }}>
       <h1 style={{ fontSize: 16, fontWeight: 500, color: "#6b7280", margin: "0 0 24px" }}>
         メモ作成タスク
       </h1>
@@ -410,7 +421,6 @@ export default function WriterPage() {
       {step === "consent" && writer && (
         <ConsentScreen
           role="writer"
-          condition={writer.condition}
           pisUrl={writer.pis_signed_url}
           onConsent={consent}
           loading={loading}
@@ -421,22 +431,29 @@ export default function WriterPage() {
       {step === "intro" && writer && (
         <div
           style={{
-            maxWidth: 760,
+            maxWidth: 900,
             fontSize: 16,
             lineHeight: 1.8,
             color: "#1f2937",
           }}
         >
           <h2 style={{ fontSize: 28, marginBottom: 24 }}>メモ作成タスクの説明</h2>
-
+          {writer.condition === "human_only" ? (
+            <p style={{ marginBottom: 24 }}>あなたは<b>AIを使用せずにメモを作成する</b>条件に振り分けられました。</p>
+          ) : (
+            <p style={{ marginBottom: 24 }}>あなたは<b>AIを使用してメモを作成する</b>条件に振り分けられました。</p>
+          )}
           <p style={{ marginBottom: 24 }}>
-            本タスクでは、AIプロトタイピングプログラムでの主な学びを同僚に向けて共有する短いメモを作成していただきます。作成したメモは、ご所属部署の同僚3名に共有されます。執筆の制限時間は15分です。
+            これからAIプロトタイピングプログラムでの主な学びを同僚に向けて共有する短いメモを作成していただきます。作成したメモは、ご所属部署の同僚約3名に共有されます。
+          </p>
+          <p style={{ marginBottom: 24 }}>
+            執筆の制限時間は<b>15分です。</b>15分経過すると、それ以降の編集は自動的に無効化されます。早めに完了した場合は、15分を待たずに終了することができます。
           </p>
           <p style={{ marginBottom: 24 }}>
             執筆中には、補助資料としてAIプロトタイピングプログラムの概要PDF、ならびにプログラム中の全アクティビティに対するご自身の振り返り内容が表示されます。こちらはメモ作成の参考にご利用いただけます。
           </p>
           <p style={{ marginBottom: 32 }}>
-            本タスクは、他者と相談・会話せずに個人で実施してください。ノートPCまたはデスクトップPCを使用し、途中で中断せず一気に進めることを推奨します。タスク開始から15分が経過すると、それ以上の編集は自動的に無効化されます。
+            本タスクは、<b>ノートPCまたはデスクトップPCを使用し、途中で中断せず一気に完了して頂くようお願いします。</b>また他者と相談・会話せずに個人で実施してください。
           </p>
 
           <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>メモに含めて頂きたいこと（必ずしもこの構成に沿う必要はありません）</h3>
@@ -446,31 +463,42 @@ export default function WriterPage() {
             <li style={{ marginBottom: 8 }}>今すぐにできること／変えられること</li>
           </ul>
 
-          <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>本条件における注意事項</h3>
+          <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>使用するインターフェースの説明</h3>
+          <img
+            src={
+              writer.condition === "human_only"
+                ? "/Interface-Human-Only.jpg"
+                : "/Interface-AI-Mediated.jpg"
+            }
+            alt="メモ作成インターフェースのプレビュー"
+            style={{ width: "100%", height: "auto", display: "block", marginBottom: 32 }}
+          />
+
+          <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>注意事項</h3>
           {writer.condition === "human_only" ? (
             <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
               <li style={{ marginBottom: 8 }}>AIを使用せずに執筆してください。</li>
               <li style={{ marginBottom: 8 }}>
-                外部のAIツールや、外部の作成支援サービスは使用しないでください。
+                外部のAIツールや、外部のウェブサイト・アプリケーションは使用しないでください。
               </li>
               <li style={{ marginBottom: 8 }}>
-                提供された資料とご自身の理解のみをもとに作成してください。
+                提供された補助資料とご自身の理解のみをもとに作成してください。
               </li>
             </ul>
           ) : (
             <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
               <li style={{ marginBottom: 8 }}>
-                最初の10分間はAIを使用してドラフトを生成してください。
+                最初の10分間はAI（Gemini）を使用してドラフトを生成してください。
               </li>
               <li style={{ marginBottom: 8 }}>
-                10分経過後はAIの利用が無効化されますが、その代わりにAIで出力した内容を直接編集できるようになります。残りの5分間は、ドラフトの編集・調整にご利用ください。
+                10分経過後はAIの利用が無効化されますが、その代わりにAIで出力した内容を直接編集できるようになります。残りの5分間は、手動での編集・修正にご利用ください。
               </li>
               <li style={{ marginBottom: 8 }}>本インターフェース以外のツールは使用しないでください。</li>
               <li style={{ marginBottom: 8 }}>
                 AIへのプロンプトおよびAIからの応答はログとして記録されます。
               </li>
               <li style={{ marginBottom: 8 }}>
-                AIへのプロンプトに、顧客名、クライアントデータ、同僚の個人情報、機密性の高いプロジェクト情報などを入力しないでください。
+                AIへのプロンプトには、顧客名、クライアントデータ、同僚の個人情報、その他社外秘を入力しないでください。
               </li>
             </ul>
           )}
@@ -487,7 +515,7 @@ export default function WriterPage() {
         </div>
       )}
 
-      {step === "writing" && writer && (
+      {step === "writing" && writer && writer.condition && (
         <div>
           {resumed && (
             <div
@@ -508,7 +536,7 @@ export default function WriterPage() {
               }}
             >
               <span>
-                以前の続きから再開します。タイマーは最初にタスクを開始した時点から継続しているため、執筆中だった内容は復元されません。残り時間を確認のうえ、引き続きメモを作成してください。
+                以前の続きから再開します。タイマーは最初にタスクを開始した時点から継続していますが、執筆中だった内容は復元されません。残り時間を確認のうえ、引き続きメモを作成してください。
               </span>
               <button
                 type="button"
@@ -573,7 +601,7 @@ export default function WriterPage() {
           </div>
 
           {writer.condition === "ai_mediated" && writingPhase === "ai_prompt" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: 16, alignItems: "start" }}>
               <div>
                 <div
                   style={{
@@ -605,10 +633,17 @@ export default function WriterPage() {
                 <label>
                   AIへの依頼内容
                   <textarea
+                    ref={aiPromptTextareaRef}
                     value={aiPrompt}
                     onChange={(e) => onPromptChange(e.target.value)}
                     placeholder="作成したいメモの内容や、含めたいポイントを入力してください。"
-                    style={{ width: "100%", minHeight: 100, marginTop: 4 }}
+                    style={{
+                      width: "100%",
+                      minHeight: 100,
+                      marginTop: 4,
+                      resize: "none",
+                      overflow: "hidden",
+                    }}
                   />
                 </label>
                 <div style={{ marginTop: 8 }}>
@@ -668,7 +703,7 @@ export default function WriterPage() {
           )}
 
           {(writer.condition === "human_only" || writingPhase === "manual_edit") && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: 16, alignItems: "start" }}>
               <div>
                 <div
                   style={{
@@ -770,9 +805,16 @@ export default function WriterPage() {
                   <button
                     type="button"
                     onClick={() => setShowSwitchConfirm(false)}
-                    style={{ textAlign: "center", justifyContent: "center" }}
+                    style={{
+                      background: "transparent",
+                      color: "#111827",
+                      border: "none",
+                      padding: "10px 16px",
+                      textAlign: "center",
+                      justifyContent: "center",
+                    }}
                   >
-                    AI生成を続ける
+                    AI生成に戻る
                   </button>
                 </div>
               </div>
@@ -794,7 +836,7 @@ export default function WriterPage() {
         </div>
       )}
 
-      {step === "survey" && writer && (
+      {step === "survey" && writer && writer.condition && (
         <WriterSurvey
           condition={writer.condition}
           onSubmit={submitSurvey}

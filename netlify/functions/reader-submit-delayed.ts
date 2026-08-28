@@ -12,7 +12,9 @@ export const handler: Handler = async (event) => {
   }
   const supabase = getSupabase();
   const now = new Date().toISOString();
-  const { error } = await supabase
+  // Idempotency guard: only the first submission wins; retries are treated as a
+  // no-op success so the client can move on without overwriting stored answers.
+  const { data: updated, error } = await supabase
     .from("readers")
     .update({
       delayed_answers_json,
@@ -20,9 +22,14 @@ export const handler: Handler = async (event) => {
       status: "completed",
       updated_at: now,
     })
-    .eq("reader_id", reader_id);
+    .eq("reader_id", reader_id)
+    .is("delayed_submitted_at", null)
+    .select("reader_id");
   if (error) {
     return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
+  }
+  if (!updated || updated.length === 0) {
+    return jsonResponse(200, { ok: true, already_submitted: true });
   }
   return jsonResponse(200, { ok: true });
 };

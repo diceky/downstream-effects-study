@@ -103,6 +103,7 @@ export default function SourceMaterials({
             `Activity ${r.activity_number ?? i + 1}: ${r.title ?? ""}`
           );
           const rawText = r.text ?? "";
+          const hasText = rawText.trim().length > 0;
           const emojifiedText = renderShortcodes(rawText);
           const clipboardText = `${heading}\n\n${emojifiedText}`;
           return (
@@ -162,13 +163,26 @@ export default function SourceMaterials({
                 <Icon name={copiedIndex === i ? "check" : "content_copy"} size={18} />
               </button>
               {isOpen && (
-                <MarkdownRenderer
-                  source={emojifiedText}
-                  style={{
-                    padding: "12px",
-                    borderTop: "1px solid #e5e7eb",
-                  }}
-                />
+                hasText ? (
+                  <MarkdownRenderer
+                    source={emojifiedText}
+                    style={{
+                      padding: "12px",
+                      borderTop: "1px solid #e5e7eb",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      padding: "12px",
+                      borderTop: "1px solid #e5e7eb",
+                      fontSize: 12,
+                      color: "#9ca3af",
+                    }}
+                  >
+                    投稿無し
+                  </div>
+                )
               )}
             </div>
           );

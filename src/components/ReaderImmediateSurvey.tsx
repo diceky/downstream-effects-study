@@ -122,12 +122,12 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
       setter: setRelevance,
     },
     {
-      label: "このメモを読んで、チームとして今後より意識すべきだと思ったことを1つ教えてください。",
+      label: "このメモを読んで、チームとして今後もっと意識すべきだと思ったことを1つ教えてください。",
       value: teamAwareness,
       setter: setTeamAwareness,
     },
     {
-      label: "この内容を実務に活かす前に、メモの作成者に対して確認・明確化したい点があれば教えてください。",
+      label: "この内容を実務に活かす前に、メモの作成者に対して確認・質問したい点があれば教えてください。",
       value: clarification,
       setter: setClarification,
     },

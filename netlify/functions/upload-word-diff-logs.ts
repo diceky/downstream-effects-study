@@ -31,6 +31,27 @@ export const handler: Handler = async (event) => {
   }
   if (logs.length === 0) return jsonResponse(200, { inserted: 0 });
 
+  const supabase = getSupabase();
+
+  // Ownership guard: the (writer_id, memo_id, session_id) triple must match the row
+  // written by writer-start. Blocks arbitrary clients from polluting the log table
+  // with rows attributed to another participant.
+  const { data: writerRow, error: lookupErr } = await supabase
+    .from("writers")
+    .select("current_memo_id, current_session_id")
+    .eq("writer_id", writer_id)
+    .maybeSingle();
+  if (lookupErr) {
+    return jsonResponse(500, { error: "Failed to verify session" });
+  }
+  if (
+    !writerRow ||
+    writerRow.current_memo_id !== memo_id ||
+    writerRow.current_session_id !== session_id
+  ) {
+    return jsonResponse(403, { error: "Session mismatch" });
+  }
+
   const rows = logs.map((l) => ({
     session_id,
     writer_id,
@@ -46,7 +67,6 @@ export const handler: Handler = async (event) => {
     created_at: l.timestamp ?? new Date().toISOString(),
   }));
 
-  const supabase = getSupabase();
   const { error } = await supabase.from("word_diff_logs").insert(rows);
   if (error) {
     return jsonResponse(500, { error: "Failed to insert logs" });

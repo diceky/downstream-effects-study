@@ -3,8 +3,6 @@ import { adminCall, getAdminPassword, setAdminPassword } from "../lib/adminClien
 import Icon from "../components/Icon";
 import MarkdownRenderer from "../components/MarkdownRenderer";
 
-const REFLECTION_SLOTS = 12;
-
 const PROGRAM_OVERVIEW_PDF_OPTIONS: string[] = [
   "DHC01 - AI_Prototyping Program.pdf",
   "DHC02 - AI_Prototyping Program.pdf",
@@ -14,19 +12,19 @@ const PROGRAM_OVERVIEW_PDF_OPTIONS: string[] = [
   "DHC06 - AI_Prototyping Program.pdf",
 ];
 
-const DEFAULT_ACTIVITY_TITLES: string[] = [
-  "Gemini/Google AI Studioをひとまず触ってみる",
-  "会話に潜む認知バイアスを意識してみよう！",
-  "AIのアウトプットを裏取りしてみよう！",
-  "AIコールセンターに電話してみよう！",
-  "褒めるAIと厳しいAI、どっちがいい？",
-  "答えが欲しい？問いかけが欲しい？",
-  "理想的なクレーム対応を完全再現してみよう！",
-  "組織の独自情報を組み込んでみよう！",
-  "身の回りの困りごとを解消するアプリを作ってみよう！",
-  "自分ならこう読ませる！",
-  "理想のAIお問い合わせ窓口をゼロから組んでみよう！",
-  "ラスト・フリカエリ",
+// Activity 5 (答えが欲しい？問いかけが欲しい？) was an irregular one-off; most cohorts have 11 activities.
+const DEFAULT_ACTIVITY_TEMPLATE: { activity_number: number; title: string }[] = [
+  { activity_number: 0, title: "Gemini/Google AI Studioをひとまず触ってみる" },
+  { activity_number: 1, title: "会話に潜む認知バイアスを意識してみよう！" },
+  { activity_number: 2, title: "AIのアウトプットを裏取りしてみよう！" },
+  { activity_number: 3, title: "AIコールセンターに電話してみよう！" },
+  { activity_number: 4, title: "褒めるAIと厳しいAI、どっちがいい？" },
+  { activity_number: 5, title: "理想的なクレーム対応を完全再現してみよう！" },
+  { activity_number: 6, title: "組織の独自情報を組み込んでみよう！" },
+  { activity_number: 7, title: "身の回りの困りごとを解消するアプリを作ってみよう！" },
+  { activity_number: 8, title: "自分ならこう読ませる！" },
+  { activity_number: 9, title: "理想のAIお問い合わせ窓口をゼロから組んでみよう！" },
+  { activity_number: 10, title: "ラスト・フリカエリ" },
 ];
 
 type Condition = "human_only" | "ai_mediated";
@@ -72,7 +70,7 @@ interface WriterDraft {
   email: string;
   name: string;
   program_overview_pdf_url: string;
-  reflections: { title: string; text: string }[];
+  reflections: { activity_number: number; title: string; text: string }[];
 }
 
 interface ReaderDraft {
@@ -82,8 +80,9 @@ interface ReaderDraft {
 }
 
 function emptyReflections() {
-  return Array.from({ length: REFLECTION_SLOTS }, (_, i) => ({
-    title: DEFAULT_ACTIVITY_TITLES[i] ?? "",
+  return DEFAULT_ACTIVITY_TEMPLATE.map((entry) => ({
+    activity_number: entry.activity_number,
+    title: entry.title,
     text: "",
   }));
 }
@@ -106,24 +105,25 @@ function emptyReaderDraft(): ReaderDraft {
   };
 }
 
-function reflectionsToDraft(json: ReflectionEntry[] | null): { title: string; text: string }[] {
-  const slots = emptyReflections();
-  if (!Array.isArray(json)) return slots;
-  for (const entry of json) {
-    const idx = entry.activity_number ?? -1;
-    if (idx >= 0 && idx < REFLECTION_SLOTS) {
-      slots[idx] = { title: entry.title ?? "", text: entry.text ?? "" };
-    }
-  }
-  return slots;
+function reflectionsToDraft(
+  json: ReflectionEntry[] | null
+): { activity_number: number; title: string; text: string }[] {
+  if (!Array.isArray(json)) return [];
+  return json.map((entry) => ({
+    activity_number: entry.activity_number,
+    title: entry.title ?? "",
+    text: entry.text ?? "",
+  }));
 }
 
-function reflectionsFromDraft(slots: { title: string; text: string }[]): ReflectionEntry[] {
+function reflectionsFromDraft(
+  slots: { activity_number: number; title: string; text: string }[]
+): ReflectionEntry[] {
   const out: ReflectionEntry[] = [];
-  slots.forEach((slot, i) => {
+  slots.forEach((slot) => {
     if (slot.title.trim() || slot.text.trim()) {
       out.push({
-        activity_number: i,
+        activity_number: slot.activity_number,
         title: slot.title.trim(),
         text: slot.text.trim(),
       });
@@ -551,7 +551,7 @@ export default function AdminPage() {
             </label>
           </div>
 
-          <h4 style={{ marginTop: 16 }}>振り返り (12 件)</h4>
+          <h4 style={{ marginTop: 16 }}>振り返り ({writerDraft.reflections.length} 件)</h4>
           <p style={{ fontSize: 12, color: "#555" }}>
             空欄の枠は保存時に無視されます。タイトルか本文のどちらかが入力されている枠のみ保存されます。
           </p>
@@ -561,7 +561,7 @@ export default function AdminPage() {
                 key={i}
                 style={{ border: "1px solid #eee", padding: 8, borderRadius: 4 }}
               >
-                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Activity {i}</div>
+                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Activity {r.activity_number}</div>
                 <input
                   type="text"
                   placeholder="タイトル"
@@ -757,16 +757,20 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => toggleMemoExpanded(m.memo_id)}
+                          aria-label={isOpen ? "隠す" : "表示"}
+                          aria-expanded={isOpen}
                           style={{
-                            padding: "4px 10px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: 4,
-                            background: "#fff",
+                            padding: 2,
+                            border: "none",
+                            background: "transparent",
                             cursor: "pointer",
-                            fontSize: 13,
+                            color: "var(--color-text)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
-                          {isOpen ? "隠す" : "表示"}
+                          <Icon name={isOpen ? "arrow_drop_down" : "arrow_right"} size={24} />
                         </button>
                       ) : (
                         <span style={{ color: "#9ca3af" }}>—</span>

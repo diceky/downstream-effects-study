@@ -9,8 +9,6 @@ Minimal Vite + React frontend with Netlify Functions backend and Supabase storag
 - Supabase (Postgres) via service role key
 - `diff-match-patch` for word-diff logging
 
-The browser never talks to Supabase directly.
-
 ## Setup
 
 1. Install dependencies:

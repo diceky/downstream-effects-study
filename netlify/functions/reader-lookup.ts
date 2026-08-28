@@ -31,12 +31,12 @@ export const handler: Handler = async (event) => {
   if (!rows || rows.length === 0) {
     return jsonResponse(404, {
       error:
-        "このメールアドレスは、本研究のメモ閲覧タスクに割り当てられていません。会社のメールアドレスが正しく入力されているか確認してください。問題が続く場合は、研究担当者までご連絡ください。",
+        "このメールアドレスは、本研究のメモ閲覧タスクに割り当てられていません。会社のメールアドレスが正しく入力されているか確認してください。問題が続く場合は、研究担当者（Dice）までご連絡ください。",
     });
   }
   if (rows.length > 1) {
     return jsonResponse(409, {
-      error: "このメールアドレスに複数の研究タスクが割り当てられています。研究担当者までご連絡ください。",
+      error: "このメールアドレスに複数の研究タスクが割り当てられています。研究担当者（Dice）までご連絡ください。",
     });
   }
 
@@ -49,11 +49,11 @@ export const handler: Handler = async (event) => {
       .eq("memo_id", reader.assigned_memo_id)
       .maybeSingle();
     if (memoErr || !memo) {
-      return jsonResponse(500, { error: "メモを読み込めませんでした。研究担当者までご連絡ください。" });
+      return jsonResponse(500, { error: "メモを読み込めませんでした。研究担当者（Dice）までご連絡ください。" });
     }
     const { data: writer } = await supabase
       .from("writers")
-      .select("name, email")
+      .select("name")
       .eq("writer_id", reader.assigned_writer_id)
       .maybeSingle();
     return jsonResponse(200, {
@@ -64,7 +64,6 @@ export const handler: Handler = async (event) => {
       status: reader.status,
       memo_text: memo.final_memo_text,
       writer_name: writer?.name ?? null,
-      writer_email: writer?.email ?? null,
       pis_signed_url: await signStudyMaterialUrl(READER_PIS_PATH),
     });
   }

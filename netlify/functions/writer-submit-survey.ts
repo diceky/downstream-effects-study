@@ -13,7 +13,9 @@ export const handler: Handler = async (event) => {
 
   const supabase = getSupabase();
   const now = new Date().toISOString();
-  const { error } = await supabase
+  // Idempotency guard: only the first submission wins; retries are treated as a
+  // no-op success so the client can move on without overwriting stored answers.
+  const { data: updated, error } = await supabase
     .from("writers")
     .update({
       survey_answers_json,
@@ -21,10 +23,15 @@ export const handler: Handler = async (event) => {
       status: "completed",
       updated_at: now,
     })
-    .eq("writer_id", writer_id);
+    .eq("writer_id", writer_id)
+    .is("survey_submitted_at", null)
+    .select("writer_id");
 
   if (error) {
     return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
+  }
+  if (!updated || updated.length === 0) {
+    return jsonResponse(200, { ok: true, already_submitted: true });
   }
   return jsonResponse(200, { ok: true });
 };

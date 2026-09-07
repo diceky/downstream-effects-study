@@ -54,7 +54,7 @@ export default function SourceMaterials({
   return (
     <aside style={{ border: "1px solid #ccc", padding: 12, borderRadius: 4 }}>
       <h3>補足資料</h3>
-      <p>以下の資料を参考にしてメモを作成してください。すべての資料を必ず使う必要はありません。</p>
+      <p>以下の資料を参考にしてメモを作成してください。資料の使用は任意です、使う必要はありません。</p>
 
       <section style={{ marginTop: 12 }}>
         <h4>プログラムの概要PDF</h4>
@@ -166,6 +166,7 @@ export default function SourceMaterials({
                 hasText ? (
                   <MarkdownRenderer
                     source={emojifiedText}
+                    slackFlavored
                     style={{
                       padding: "12px",
                       borderTop: "1px solid #e5e7eb",

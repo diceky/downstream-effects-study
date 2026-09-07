@@ -71,13 +71,13 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
   const [mainPoint, setMainPoint] = useState("");
   const [relevance, setRelevance] = useState("");
   const [teamAwareness, setTeamAwareness] = useState("");
-  const [clarification, setClarification] = useState("");
   const [clarity, setClarity] = useState<number | null>(null);
   const [understanding, setUnderstanding] = useState<number | null>(null);
   const [burden, setBurden] = useState<number | null>(null);
   const [closeness, setCloseness] = useState<number | null>(null);
   const [deptKnowledge, setDeptKnowledge] = useState<number | null>(null);
-  const [teamRelevance, setTeamRelevance] = useState<number | null>(null);
+  const [selfReference, setSelfReference] = useState<number | null>(null);
+  const [otherReference, setOtherReference] = useState<number | null>(null);
   const [authorInfluence, setAuthorInfluence] = useState<number | null>(null);
 
   const submit = async (e: FormEvent) => {
@@ -86,13 +86,13 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
       main_point: mainPoint,
       relevance,
       team_awareness: teamAwareness,
-      clarification,
       clarity,
       understanding,
       burden,
       closeness,
       dept_knowledge: deptKnowledge,
-      team_relevance: teamRelevance,
+      self_reference: selfReference,
+      other_reference: otherReference,
       author_influence: authorInfluence,
     });
   };
@@ -101,13 +101,13 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
     mainPoint.trim() !== "" &&
     relevance.trim() !== "" &&
     teamAwareness.trim() !== "" &&
-    clarification.trim() !== "" &&
     clarity !== null &&
     understanding !== null &&
     burden !== null &&
     closeness !== null &&
     deptKnowledge !== null &&
-    teamRelevance !== null &&
+    selfReference !== null &&
+    otherReference !== null &&
     authorInfluence !== null;
 
   const textQuestions: { label: string; value: string; setter: (v: string) => void }[] = [
@@ -125,11 +125,6 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
       label: "このメモを読んで、チームとして今後もっと意識すべきだと思ったことを1つ教えてください。",
       value: teamAwareness,
       setter: setTeamAwareness,
-    },
-    {
-      label: "この内容を実務に活かす前に、メモの作成者に対して確認・質問したい点があれば教えてください。",
-      value: clarification,
-      setter: setClarification,
     },
   ];
 
@@ -174,10 +169,16 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
         onChange={setBurden}
       />
       <Likert
-        name="team_relevance"
-        label="メモの内容は自分のチームにとって関連性の高いものだと感じた。"
-        value={teamRelevance}
-        onChange={setTeamRelevance}
+        name="self_reference"
+        label="メモの内容は自分の部署・チームに関係する内容だと感じた。"
+        value={selfReference}
+        onChange={setSelfReference}
+      />
+      <Likert
+        name="other_reference"
+        label="メモの内容は書き手自身の経験・視点・気づきが含まれていると感じた。"
+        value={otherReference}
+        onChange={setOtherReference}
       />
       <Likert
         name="closeness"

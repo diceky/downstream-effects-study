@@ -254,6 +254,21 @@ hr {
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.9em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.markdown-preview pre {
+  background: var(--color-surface-alt);
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin: 0 0 0.75em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
 }
 .markdown-preview blockquote {
   margin: 0 0 0.75em;

@@ -174,6 +174,7 @@ export default function AdminPage() {
   type Tab = "writers" | "readers" | "memos";
   const [tab, setTab] = useState<Tab>("writers");
   const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set());
+  const [reflectionsPreview, setReflectionsPreview] = useState(false);
 
   const toggleMemoExpanded = (memoId: string) => {
     setExpandedMemos((prev) => {
@@ -215,6 +216,16 @@ export default function AdminPage() {
         label: `${m.memo_id} (writer ${m.writer_id})`,
       })),
     [memos]
+  );
+
+  const sortedWriters = useMemo(
+    () => [...writers].sort((a, b) => a.writer_id.localeCompare(b.writer_id)),
+    [writers]
+  );
+
+  const sortedReaders = useMemo(
+    () => [...readers].sort((a, b) => a.reader_id.localeCompare(b.reader_id)),
+    [readers]
   );
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -453,7 +464,7 @@ export default function AdminPage() {
             </tr>
           </thead>
           <tbody>
-            {writers.map((w) => (
+            {sortedWriters.map((w) => (
               <tr key={w.writer_id}>
                 <td style={cellStyle}>{w.writer_id}</td>
                 <td style={cellStyle}>{w.email}</td>
@@ -551,7 +562,25 @@ export default function AdminPage() {
             </label>
           </div>
 
-          <h4 style={{ marginTop: 16 }}>振り返り ({writerDraft.reflections.length} 件)</h4>
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+            }}
+          >
+            <h4 style={{ margin: 0 }}>振り返り ({writerDraft.reflections.length} 件)</h4>
+            <button
+              type="button"
+              onClick={() => setReflectionsPreview((v) => !v)}
+              title={reflectionsPreview ? "編集モードに切り替え" : "プレビューに切り替え"}
+            >
+              <Icon name={reflectionsPreview ? "edit" : "visibility"} />
+              {reflectionsPreview ? "編集" : "プレビュー"}
+            </button>
+          </div>
           <p style={{ fontSize: 12, color: "#555" }}>
             空欄の枠は保存時に無視されます。タイトルか本文のどちらかが入力されている枠のみ保存されます。
           </p>
@@ -562,27 +591,51 @@ export default function AdminPage() {
                 style={{ border: "1px solid #eee", padding: 8, borderRadius: 4 }}
               >
                 <div style={{ fontWeight: "bold", marginBottom: 4 }}>Activity {r.activity_number}</div>
-                <input
-                  type="text"
-                  placeholder="タイトル"
-                  value={r.title}
-                  onChange={(e) => {
-                    const next = [...writerDraft.reflections];
-                    next[i] = { ...next[i], title: e.target.value };
-                    setWriterDraft({ ...writerDraft, reflections: next });
-                  }}
-                  style={{ width: "100%", padding: 6, marginBottom: 4 }}
-                />
-                <textarea
-                  placeholder="振り返り本文"
-                  value={r.text}
-                  onChange={(e) => {
-                    const next = [...writerDraft.reflections];
-                    next[i] = { ...next[i], text: e.target.value };
-                    setWriterDraft({ ...writerDraft, reflections: next });
-                  }}
-                  style={{ width: "100%", padding: 6, minHeight: 60 }}
-                />
+                {reflectionsPreview ? (
+                  <>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                      {r.title || <span style={{ color: "#9ca3af" }}>（タイトル未入力）</span>}
+                    </div>
+                    {r.text ? (
+                      <div
+                        style={{
+                          background: "#f8fafc",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 6,
+                          padding: 12,
+                        }}
+                      >
+                        <MarkdownRenderer source={r.text} slackFlavored />
+                      </div>
+                    ) : (
+                      <div style={{ color: "#9ca3af", fontSize: 13 }}>（本文未入力）</div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="タイトル"
+                      value={r.title}
+                      onChange={(e) => {
+                        const next = [...writerDraft.reflections];
+                        next[i] = { ...next[i], title: e.target.value };
+                        setWriterDraft({ ...writerDraft, reflections: next });
+                      }}
+                      style={{ width: "100%", padding: 6, marginBottom: 4 }}
+                    />
+                    <textarea
+                      placeholder="振り返り本文"
+                      value={r.text}
+                      onChange={(e) => {
+                        const next = [...writerDraft.reflections];
+                        next[i] = { ...next[i], text: e.target.value };
+                        setWriterDraft({ ...writerDraft, reflections: next });
+                      }}
+                      style={{ width: "100%", padding: 6, minHeight: 60 }}
+                    />
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -620,7 +673,7 @@ export default function AdminPage() {
             </tr>
           </thead>
           <tbody>
-            {readers.map((r) => (
+            {sortedReaders.map((r) => (
               <tr key={r.reader_id}>
                 <td style={cellStyle}>{r.reader_id}</td>
                 <td style={cellStyle}>{r.email}</td>

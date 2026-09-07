@@ -22,10 +22,10 @@ interface Body {
 
 const MAX_HISTORY_MESSAGES = 50;
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 const SYSTEM_INSTRUCTION =
-  "あなたは社内のAI研修プログラムの学びをまとめる支援アシスタントです。日本語で簡潔なメモのドラフトを作成してください。";
+  "あなたは社内のAI研修プログラムの学びをまとめる支援アシスタントです。日本語での簡潔なメモのドラフト作成を支援してください。";
 
 async function fetchPdfAsBase64(
   pdfUrl: string

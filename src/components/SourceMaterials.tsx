@@ -53,7 +53,7 @@ export default function SourceMaterials({
 
   return (
     <aside style={{ border: "1px solid #ccc", padding: 12, borderRadius: 4 }}>
-      <h3>補足資料</h3>
+      <h3>補助資料</h3>
       <p>以下の資料を参考にしてメモを作成してください。資料の使用は任意です、使う必要はありません。</p>
 
       <section style={{ marginTop: 12 }}>

@@ -191,7 +191,7 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
 
       <fieldset style={{ marginTop: 16, border: "1px solid #eee", padding: 8 }}>
         <legend>
-          補助資料（プログラム概要PDFおよびご自身の振り返り）を使用しましたか？
+          補助資料（プログラム概要PDFおよびご自身の総振り返り）を使用しましたか？
           <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
         </legend>
         {["はい", "いいえ"].map((v) => (

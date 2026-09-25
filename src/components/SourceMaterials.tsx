@@ -90,7 +90,7 @@ export default function SourceMaterials({
       <hr style={{ border: 0, borderTop: "1px solid #e5e7eb", margin: "24px 0" }} />
 
       <section>
-        <h4>あなたのプログラム中の振り返り</h4>
+        <h4>あなたのプログラム時の総振り返り</h4>
         {condition === "ai_mediated" && (
           <p style={{ fontSize: 13, color: "#444" }}>
             AIに使わせたい内容がある場合は、必要な部分をプロンプトにコピペするか、ご自身で要約してご利用ください。

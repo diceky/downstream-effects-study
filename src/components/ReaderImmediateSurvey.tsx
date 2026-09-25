@@ -112,7 +112,7 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
 
   const textQuestions: { label: string; value: string; setter: (v: string) => void }[] = [
     {
-      label: "このメモを通して、作成者がチームに一番伝えたかったポイントは何だと思いますか？",
+      label: "このメモを通して、作成者があなた、もしくはチームに一番伝えたかったポイントは何だと思いますか？",
       value: mainPoint,
       setter: setMainPoint,
     },
@@ -122,7 +122,7 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
       setter: setRelevance,
     },
     {
-      label: "このメモを読んで、チームとして今後もっと意識すべきだと思ったことを1つ教えてください。",
+      label: "このメモを読んで、今後もっと意識すべきだと思ったことを1つ教えてください。",
       value: teamAwareness,
       setter: setTeamAwareness,
     },

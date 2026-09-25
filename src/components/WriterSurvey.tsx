@@ -68,10 +68,11 @@ function Likert({
 }
 
 export default function WriterSurvey({ condition, onSubmit, loading, error }: Props) {
+  const [keyTakeaway, setKeyTakeaway] = useState("");
   const [burden, setBurden] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [divisionUnderstanding, setDivisionUnderstanding] = useState<number | null>(null);
-  const [confidence, setConfidence] = useState<number | null>(null);
+  const [satisfaction, setSatisfaction] = useState<number | null>(null);
   const [ownership, setOwnership] = useState<number | null>(null);
   const [completedAlone, setCompletedAlone] = useState<string>("");
   const [usedMaterials, setUsedMaterials] = useState<string>("");
@@ -84,10 +85,11 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const answers: Record<string, unknown> = {
+      key_takeaway: keyTakeaway,
       burden,
       difficulty,
       division_understanding: divisionUnderstanding,
-      confidence,
+      satisfaction,
       ownership,
       completed_alone: completedAlone,
       used_materials: usedMaterials,
@@ -103,10 +105,11 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
   };
 
   const allRequiredAnswered =
+    keyTakeaway.trim() !== "" &&
     burden !== null &&
     difficulty !== null &&
     divisionUnderstanding !== null &&
-    confidence !== null &&
+    satisfaction !== null &&
     ownership !== null &&
     completedAlone !== "" &&
     usedMaterials !== "" &&
@@ -119,6 +122,19 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
       <h2>メモ作成後アンケート</h2>
       <p>メモ作成タスクについて、以下の質問に回答してください。</p>
 
+      <div style={{ marginTop: 16 }}>
+        <label>
+          このメモを読んだ同僚に、最も持ち帰ってもらいたいポイントを一つ選ぶとしたら、何ですか？
+          <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
+          <textarea
+            value={keyTakeaway}
+            onChange={(e) => setKeyTakeaway(e.target.value)}
+            required
+            style={{ width: "100%", minHeight: 80, marginTop: 4 }}
+          />
+        </label>
+      </div>
+
       <Likert
         name="burden"
         label="このメモを作成する際に、認知的な負荷を強く感じた。"
@@ -126,10 +142,10 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
         onChange={setBurden}
       />
       <Likert
-        name="confidence"
-        label="作成したメモの内容に自信がある。"
-        value={confidence}
-        onChange={setConfidence}
+        name="satisfaction"
+        label="作成したメモの内容に満足している。"
+        value={satisfaction}
+        onChange={setSatisfaction}
       />
       <Likert
         name="ownership"

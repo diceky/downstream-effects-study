@@ -92,7 +92,7 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
       <h2>フォローアップアンケート</h2>
       <p>
         このアンケートでは、2週間前に読んだAIプロトタイピングプログラムの共有メモについて現在覚えている内容や、そのメモがあなたの考え方や業務に及ぼした影響についてお聞きします。
-        メモは再表示されません。覚えている範囲で回答してください。
+        <b>メモは再表示されません。</b>覚えている範囲で回答してください。
       </p>
 
       <div style={{ marginTop: 12 }}>

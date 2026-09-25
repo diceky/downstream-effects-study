@@ -444,10 +444,13 @@ export default function WriterPage() {
             <p style={{ marginBottom: 24 }}>あなたは<b>AIを使用してメモを作成する</b>条件に振り分けられました。</p>
           )}
           <p style={{ marginBottom: 24 }}>
-            これからAIプロトタイピングプログラムでの主な学びを、プログラム未参加の同僚に向けて共有する短いメモを作成していただきます。作成したメモは、社内の同僚約2-3名に共有されます。
+            これからAIプロトタイピングプログラムでの主な学びを、プログラム未参加の同僚に向けて共有する短いメモを作成していただきます。作成したメモは、社内の同僚約2-3名に記名で共有されます。
           </p>
           <p style={{ marginBottom: 24 }}>
             執筆の制限時間は<b>15分です。</b>15分経過すると、それ以降の編集は自動的に無効化されます。早めに完了した場合は、15分を待たずに終了することができます。
+             {writer.condition === "ai_mediated" ? (
+               <>最初の10分間はAI（Gemini）を使用してドラフトを生成してください。10分経過後はAIの利用が無効化され、残りの5分間はAIで出力した内容を直接編集できるようになります。手動での編集・修正にご利用ください。</>
+             ) : null}
           </p>
           <p style={{ marginBottom: 24 }}>
             執筆中には、補助資料としてAIプロトタイピングプログラムの概要PDF、ならびにプログラム時のご自身の総振り返り内容が表示されます。こちらはメモ作成の参考にご利用いただけます。
@@ -481,19 +484,19 @@ export default function WriterPage() {
               <li style={{ marginBottom: 8 }}>
                 外部のAIツールや、外部のウェブサイト・アプリケーションは使用しないでください。
               </li>
-              <li style={{ marginBottom: 8 }}>
+              {/* <li style={{ marginBottom: 8 }}>
                 提供された補助資料とご自身の理解のみをもとに作成してください。
-              </li>
+              </li> */}
             </ul>
           ) : (
             <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
-              <li style={{ marginBottom: 8 }}>
+              {/* <li style={{ marginBottom: 8 }}>
                 最初の10分間はAI（Gemini）を使用してドラフトを生成してください。
               </li>
               <li style={{ marginBottom: 8 }}>
                 10分経過後はAIの利用が無効化されますが、その代わりにAIで出力した内容を直接編集できるようになります。残りの5分間は、手動での編集・修正にご利用ください。
-              </li>
-              <li style={{ marginBottom: 8 }}>本インターフェース以外のツールは使用しないでください。</li>
+              </li> */}
+              <li style={{ marginBottom: 8 }}>外部のAIツールや、外部のウェブサイト・アプリケーションは使用しないでください。</li>
               <li style={{ marginBottom: 8 }}>
                 AIへのプロンプトおよびAIからの応答はログとして記録されます。
               </li>

@@ -7,7 +7,7 @@ import WriterSurvey from "../components/WriterSurvey";
 import MarkdownEditor from "../components/MarkdownEditor";
 import MarkdownRenderer from "../components/MarkdownRenderer";
 import Spinner from "../components/Spinner";
-import { apiPost } from "../lib/apiClient";
+import { apiPost, apiPostStream } from "../lib/apiClient";
 import { createWordDiffLogger, WordDiffLogger } from "../lib/wordDiffLogger";
 
 const CONSENT_VERSION = "v1_mvp";
@@ -268,38 +268,59 @@ export default function WriterPage() {
   const generateAi = useCallback(async () => {
     if (!writer || !memoId) return;
     if (!aiPrompt.trim()) {
-      setError("AIへの依頼内容を入力してください。");
+      setError("AIへのプロンプトを入力してください。");
       return;
     }
     setError(null);
     setAiLoading(true);
     const sentPrompt = aiPrompt;
+    setAiResponse("");
     try {
-      const data = await apiPost<{ ai_response_text: string }>("ai-generate", {
-        writer_id: writer.writer_id,
-        memo_id: memoId,
-        prompt_text: sentPrompt,
-        pdf_attached: pdfAttached,
-        history: chatHistory,
-      });
-      setAiResponse(data.ai_response_text);
+      let acc = "";
+      const { full, meta } = await apiPostStream<{
+        pdf_attached_to_model?: boolean;
+        pdf_fetch_failed?: boolean;
+        finish_reason?: string | null;
+        notice?: string | null;
+      }>(
+        "ai-generate",
+        {
+          writer_id: writer.writer_id,
+          memo_id: memoId,
+          prompt_text: sentPrompt,
+          pdf_attached: pdfAttached,
+          history: chatHistory,
+        },
+        {
+          onDelta: (chunk) => {
+            acc += chunk;
+            setAiResponse(acc);
+          },
+        }
+      );
+      const finalText = full || acc;
+      setAiResponse(finalText);
       setChatHistory((prev) =>
         [
           ...prev,
           { role: "user" as const, text: sentPrompt },
-          { role: "model" as const, text: data.ai_response_text },
+          { role: "model" as const, text: finalText },
         ].slice(-50)
       );
       setAiPrompt("");
+      setPdfAttached(false);
       logger.resetBaseline("ai_prompt", "");
       logger.onChange({
-        newValue: data.ai_response_text,
+        newValue: finalText,
         source: "ai",
         surfaceKey: "ai_response",
         location: "ai_output_area",
         targetKey: "ai_response",
         metadata: { mode: writer.condition, eventType: "ai_response_received" },
       });
+      if (meta?.notice) {
+        setError(meta.notice);
+      }
     } catch (e: any) {
       setError(e?.message ?? "AIドラフトの生成に失敗しました。");
     } finally {
@@ -447,7 +468,7 @@ export default function WriterPage() {
             これからAIプロトタイピングプログラムでの主な学びを、プログラム未参加の同僚に向けて共有する短いメモを作成していただきます。作成したメモは、社内の同僚約2-3名に記名で共有されます。
           </p>
           <p style={{ marginBottom: 24 }}>
-            執筆の制限時間は<b>15分です。</b>15分経過すると、それ以降の編集は自動的に無効化されます。早めに完了した場合は、15分を待たずに終了することができます。
+            執筆の制限時間は<b>15分</b>です。15分経過すると、それ以降は編集できなくなります。早めに完了した場合は、15分を待たずに終了することができます。
              {writer.condition === "ai_mediated" ? (
                <>最初の10分間はAI（Gemini）を使用してドラフトを生成してください。10分経過後はAIの利用が無効化され、残りの5分間はAIで出力した内容を直接編集できるようになります。手動での編集・修正にご利用ください。</>
              ) : null}
@@ -459,11 +480,11 @@ export default function WriterPage() {
             本タスクは、<b>ノートPCまたはデスクトップPCを使用し、途中で中断せず一気に完了して頂くようお願いします。</b>また他者と相談・会話せずに個人で実施してください。
           </p>
 
-          <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>メモに含めて頂きたいこと（必ずしもこの構成に沿う必要はありません）</h3>
+          <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>メモに含めて頂きたいこと</h3>
           <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
-            <li style={{ marginBottom: 8 }}>プログラムを通した学び</li>
-            <li style={{ marginBottom: 8 }}>チームにとっての気付き</li>
-            <li style={{ marginBottom: 8 }}>今すぐにできること／変えられること</li>
+            <li style={{ marginBottom: 8 }}>プログラムを通して得た学び</li>
+            <li style={{ marginBottom: 8 }}>チーム／部署にとっての気付き</li>
+            <li style={{ marginBottom: 8 }}>今日からできること／変えられること</li>
           </ul>
 
           <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>使用するインターフェースの説明</h3>
@@ -498,7 +519,7 @@ export default function WriterPage() {
               </li> */}
               <li style={{ marginBottom: 8 }}>外部のAIツールや、外部のウェブサイト・アプリケーションは使用しないでください。</li>
               <li style={{ marginBottom: 8 }}>
-                AIへのプロンプトおよびAIからの応答はログとして記録されます。
+                AIへのプロンプトおよびAIからの応答はログとして収集されます。
               </li>
               <li style={{ marginBottom: 8 }}>
                 AIへのプロンプトには、顧客名、クライアントデータ、個人情報などは入力しないでください。
@@ -619,12 +640,12 @@ export default function WriterPage() {
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                    メモに含めて頂きたいこと（必ずしもこの構成に沿う必要はありません）
+                    メモに含めて頂きたいこと
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 20 }}>
-                    <li>プログラムを通した学び</li>
-                    <li>チームにとっての気付き</li>
-                    <li>今すぐにできること／変えられること</li>
+                    <li>プログラムを通して得た学び</li>
+                    <li>チーム／部署にとっての気付き</li>
+                    <li>今日からできること／変えられること</li>
                   </ul>
                 </div>
               <section style={{ border: "1px solid #ddd", padding: 12, borderRadius: 4 }}>
@@ -634,7 +655,7 @@ export default function WriterPage() {
                   Overview PDFのみです。最後に生成されたAI出力が、次の手動修正フェーズの初期内容になります。
                 </p> */}
                 <label>
-                  AIへの依頼内容
+                  AIへのプロンプト
                   <textarea
                     ref={aiPromptTextareaRef}
                     value={aiPrompt}
@@ -656,7 +677,9 @@ export default function WriterPage() {
                       checked={pdfAttached}
                       onChange={(e) => setPdfAttached(e.target.checked)}
                     />
-                    <span style={{ marginLeft: 6 }}>プログラムの概要PDFをプロンプトに添付する</span>
+                    <span style={{ marginLeft: 6 }}>
+                      プログラムの概要PDFをプロンプトに{pdfAttached ? "添付済み" : "添付する"}
+                    </span>
                   </label>
                 </div>
                 <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -721,12 +744,12 @@ export default function WriterPage() {
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                    メモに含めて頂きたいこと（必ずしもこの構成に沿う必要はありません）
+                    メモに含めて頂きたいこと
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 20 }}>
-                    <li>プログラムを通した学び</li>
-                    <li>チームにとっての気付き</li>
-                    <li>今すぐにできること／変えられること</li>
+                    <li>プログラムを通して得た学び</li>
+                    <li>チーム／部署にとっての気付き</li>
+                    <li>今日からできること／変えられること</li>
                   </ul>
                 </div>
                 <div style={{ fontSize: "0.95rem", marginBottom: 4 }}>執筆中のメモ</div>

@@ -1,9 +1,6 @@
-import type { Handler } from "@netlify/functions";
+import type { Context } from "@netlify/functions";
 import {
   getSupabase,
-  jsonResponse,
-  methodNotAllowed,
-  parseBody,
   signStudyMaterialUrl,
 } from "./_supabase";
 
@@ -22,10 +19,32 @@ interface Body {
 
 const MAX_HISTORY_MESSAGES = 50;
 
+// Fires before Netlify Functions' 30 s wall-clock limit so we can emit a
+// graceful timeout frame instead of being killed mid-stream.
+const SELF_TIMEOUT_MS = 28_000;
+
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 const SYSTEM_INSTRUCTION =
   "あなたは社内のAI研修プログラムの学びをまとめる支援アシスタントです。日本語での簡潔なメモのドラフト作成を支援してください。";
+
+const NDJSON_HEADERS: HeadersInit = {
+  "Content-Type": "application/x-ndjson; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  "X-Accel-Buffering": "no",
+};
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
+
+function jsonError(status: number, message: string): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 async function fetchPdfAsBase64(
   pdfUrl: string
@@ -42,33 +61,95 @@ async function fetchPdfAsBase64(
   }
 }
 
-interface GeminiPart {
-  text?: string;
-  inlineData?: { mimeType: string; data: string };
+async function parseBody(req: Request): Promise<Body> {
+  try {
+    return (await req.json()) as Body;
+  } catch {
+    return {};
+  }
 }
 
-type AiResult =
-  | { ok: true; text: string }
-  | { ok: false; status: number; error: string };
+function extractTextFromChunk(chunk: any): string {
+  const parts = chunk?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  let out = "";
+  for (const p of parts) {
+    if (typeof p?.text === "string") out += p.text;
+  }
+  return out;
+}
 
-async function callAi(
-  prompt: string,
-  pdfPart: GeminiPart | null,
-  history: HistoryEntry[]
-): Promise<AiResult> {
+function extractFinishReason(chunk: any): string | undefined {
+  return chunk?.candidates?.[0]?.finishReason;
+}
+
+export default async (req: Request, _context: Context): Promise<Response> => {
+  if (req.method !== "POST") {
+    return jsonError(405, "Method not allowed");
+  }
+
+  const { writer_id, memo_id, prompt_text, pdf_attached, history } =
+    await parseBody(req);
+
+  if (!writer_id || !memo_id || !prompt_text) {
+    return jsonError(
+      400,
+      "未回答の必須項目があります。入力内容を確認してください。"
+    );
+  }
+
+  const supabase = getSupabase();
+
+  // Ownership + eligibility guard: the (writer_id, memo_id) pair must match this
+  // writer's active session, the writing task must not have ended, and only
+  // ai_mediated writers may invoke Gemini.
+  const { data: writerRow, error: lookupErr } = await supabase
+    .from("writers")
+    .select("condition, current_memo_id, task_ended_at, program_overview_pdf_url")
+    .eq("writer_id", writer_id)
+    .maybeSingle();
+  if (lookupErr) {
+    return jsonError(500, "送信中にエラーが発生しました。");
+  }
+  if (!writerRow || writerRow.current_memo_id !== memo_id) {
+    return jsonError(403, "セッションが一致しません。");
+  }
+  if (writerRow.task_ended_at) {
+    return jsonError(409, "タスクは既に終了しています。");
+  }
+  if (writerRow.condition !== "ai_mediated") {
+    return jsonError(403, "AIアシスタントはこの条件では利用できません。");
+  }
+
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) {
     console.error("[ai-generate] GEMINI_API_KEY is not configured");
-    return {
-      ok: false,
-      status: 503,
-      error: "AIサービスが利用できません。研究担当者（Dice）までご連絡ください。",
-    };
+    return jsonError(
+      503,
+      "AIサービスが利用できません。研究担当者（Dice）までご連絡ください。"
+    );
+  }
+
+  let pdfPart: GeminiPart | null = null;
+  let pdfFetchFailed = false;
+  if (pdf_attached) {
+    const rawPath = writerRow.program_overview_pdf_url as string | null;
+    const signedUrl = await signStudyMaterialUrl(rawPath);
+    if (signedUrl) {
+      const fetched = await fetchPdfAsBase64(signedUrl);
+      if (fetched) {
+        pdfPart = { inlineData: fetched };
+      } else {
+        pdfFetchFailed = true;
+      }
+    } else {
+      pdfFetchFailed = true;
+    }
   }
 
   const parts: GeminiPart[] = [];
   if (pdfPart) parts.push(pdfPart);
-  parts.push({ text: prompt });
+  parts.push({ text: prompt_text });
 
   const sanitizedHistory = (history ?? [])
     .filter(
@@ -90,11 +171,11 @@ async function callAi(
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     GEMINI_MODEL
-  )}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+  )}:streamGenerateContent?alt=sse&key=${encodeURIComponent(geminiKey)}`;
 
-  let res: Response;
+  let upstream: Response;
   try {
-    res = await fetch(url, {
+    upstream = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -107,138 +188,196 @@ async function callAi(
           candidateCount: 1,
           maxOutputTokens: 2048,
           responseMimeType: "text/plain",
-          thinkingConfig: { thinkingBudget: 1024 },
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
+      signal: req.signal,
     });
   } catch (e) {
     console.error("[ai-generate] network error", e);
-    return {
-      ok: false,
-      status: 502,
-      error: "AIへの通信に失敗しました。時間をおいて再度お試しください。",
-    };
-  }
-
-  let data: any = null;
-  try {
-    data = await res.json();
-  } catch (e) {
-    console.error("[ai-generate] invalid JSON from AI", e);
-    return {
-      ok: false,
-      status: 502,
-      error: "AIからの応答を解釈できませんでした。時間をおいて再度お試しください。",
-    };
-  }
-
-  if (!res.ok) {
-    console.error("[ai-generate] AI returned non-2xx", res.status, data);
-    return {
-      ok: false,
-      status: 502,
-      error: "AIドラフトの生成に失敗しました。時間をおいて再度お試しください。",
-    };
-  }
-
-  const candidate = data?.candidates?.[0];
-  const text: string = candidate?.content?.parts
-    ?.map((p: any) => p?.text ?? "")
-    .join("")
-    .trim() ?? "";
-
-  if (!text) {
-    const finishReason = candidate?.finishReason;
-    console.error(
-      "[ai-generate] AI returned empty text",
-      { finishReason, promptFeedback: data?.promptFeedback }
+    return jsonError(
+      502,
+      "AIへの通信に失敗しました。時間をおいて再度お試しください。"
     );
-    if (finishReason === "SAFETY" || finishReason === "BLOCKLIST" || finishReason === "RECITATION") {
-      return {
-        ok: false,
-        status: 422,
-        error:
-          "依頼内容がAIの安全フィルターによりブロックされました。表現を変えて再度お試しください。",
+  }
+
+  if (!upstream.ok || !upstream.body) {
+    try {
+      const errText = await upstream.text();
+      console.error(
+        "[ai-generate] upstream non-2xx",
+        upstream.status,
+        errText.slice(0, 500)
+      );
+    } catch {
+      console.error("[ai-generate] upstream non-2xx", upstream.status);
+    }
+    return jsonError(
+      502,
+      "AIドラフトの生成に失敗しました。時間をおいて再度お試しください。"
+    );
+  }
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const upstreamBody = upstream.body;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const write = (obj: unknown) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
       };
-    }
-    return {
-      ok: false,
-      status: 502,
-      error: "AIから有効な応答が得られませんでした。時間をおいて再度お試しください。",
-    };
-  }
 
-  return { ok: true, text };
-}
+      let accumulated = "";
+      let finishReason: string | undefined;
+      let sseBuffer = "";
+      let streamErrored = false;
+      let timedOut = false;
+      let chunksSeen = 0;
 
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") return methodNotAllowed();
-  const { writer_id, memo_id, prompt_text, pdf_attached, history } = parseBody<Body>(
-    event.body
-  );
-  if (!writer_id || !memo_id || !prompt_text) {
-    return jsonResponse(400, {
-      error: "未回答の必須項目があります。入力内容を確認してください。",
-    });
-  }
+      const reader = upstreamBody.getReader();
+      const timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        reader.cancel().catch(() => {
+          /* ignore */
+        });
+      }, SELF_TIMEOUT_MS);
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          sseBuffer += decoder.decode(value, { stream: true });
+          // Normalize CRLF so `\n\n` frame separator matches regardless of upstream.
+          sseBuffer = sseBuffer.replace(/\r\n/g, "\n");
 
-  const supabase = getSupabase();
+          // SSE frames are separated by blank lines; concatenate multiple
+          // `data:` lines within a single frame.
+          let sepIdx: number;
+          while ((sepIdx = sseBuffer.indexOf("\n\n")) !== -1) {
+            const rawFrame = sseBuffer.slice(0, sepIdx);
+            sseBuffer = sseBuffer.slice(sepIdx + 2);
 
-  // Ownership + eligibility guard: the (writer_id, memo_id) pair must match this
-  // writer's active session, the writing task must not have ended, and only
-  // ai_mediated writers may invoke Gemini.
-  const { data: writerRow, error: lookupErr } = await supabase
-    .from("writers")
-    .select("condition, current_memo_id, task_ended_at, program_overview_pdf_url")
-    .eq("writer_id", writer_id)
-    .maybeSingle();
-  if (lookupErr) {
-    return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
-  }
-  if (!writerRow || writerRow.current_memo_id !== memo_id) {
-    return jsonResponse(403, { error: "セッションが一致しません。" });
-  }
-  if (writerRow.task_ended_at) {
-    return jsonResponse(409, { error: "タスクは既に終了しています。" });
-  }
-  if (writerRow.condition !== "ai_mediated") {
-    return jsonResponse(403, { error: "AIアシスタントはこの条件では利用できません。" });
-  }
+            const dataLines: string[] = [];
+            for (const line of rawFrame.split("\n")) {
+              if (line.startsWith("data:")) {
+                dataLines.push(line.slice(5).replace(/^\s/, ""));
+              }
+            }
+            if (dataLines.length === 0) continue;
+            const payload = dataLines.join("\n");
+            if (!payload || payload === "[DONE]") continue;
 
-  let pdfPart: GeminiPart | null = null;
-  let pdfFetchFailed = false;
-  if (pdf_attached) {
-    const rawPath = writerRow.program_overview_pdf_url as string | null;
-    const signedUrl = await signStudyMaterialUrl(rawPath);
-    if (signedUrl) {
-      const fetched = await fetchPdfAsBase64(signedUrl);
-      if (fetched) {
-        pdfPart = { inlineData: fetched };
-      } else {
-        pdfFetchFailed = true;
+            let parsed: any;
+            try {
+              parsed = JSON.parse(payload);
+            } catch (e) {
+              console.error("[ai-generate] failed to parse SSE payload", e, payload.slice(0, 200));
+              continue;
+            }
+
+            chunksSeen += 1;
+            const delta = extractTextFromChunk(parsed);
+            const fr = extractFinishReason(parsed);
+            if (fr) finishReason = fr;
+
+            if (delta) {
+              accumulated += delta;
+              write({ type: "delta", text: delta });
+            } else if (chunksSeen <= 2) {
+              console.log(
+                "[ai-generate] chunk without text",
+                JSON.stringify(parsed).slice(0, 500)
+              );
+            }
+          }
+        }
+      } catch (e) {
+        if (timedOut) {
+          console.error("[ai-generate] self-imposed timeout fired", {
+            chunksSeen,
+            accumulatedLen: accumulated.length,
+          });
+          streamErrored = true;
+          write({
+            type: "error",
+            error:
+              "AIの応答がタイムアウトになりました。もう一度お試しください。",
+          });
+        } else {
+          console.error("[ai-generate] stream read error", e);
+          streamErrored = true;
+          write({
+            type: "error",
+            error:
+              "AIからの応答が途中で切断されました。時間をおいて再度お試しください。",
+          });
+        }
+      } finally {
+        clearTimeout(timeoutHandle);
+        try {
+          reader.releaseLock();
+        } catch {
+          /* ignore */
+        }
       }
-    } else {
-      pdfFetchFailed = true;
-    }
-  }
 
-  const result = await callAi(prompt_text, pdfPart, history ?? []);
+      if (streamErrored) {
+        controller.close();
+        return;
+      }
 
-  if (!result.ok) {
-    return jsonResponse(result.status, { error: result.error });
-  }
+      if (!accumulated) {
+        console.error(
+          "[ai-generate] AI returned empty text",
+          { finishReason, chunksSeen, bufferTail: sseBuffer.slice(-200) }
+        );
+        if (
+          finishReason === "SAFETY" ||
+          finishReason === "BLOCKLIST" ||
+          finishReason === "RECITATION"
+        ) {
+          write({
+            type: "error",
+            error:
+              "依頼内容がAIの安全フィルターによりブロックされました。表現を変えて再度お試しください。",
+          });
+        } else {
+          write({
+            type: "error",
+            error:
+              "AIから有効な応答が得られませんでした。時間をおいて再度お試しください。",
+          });
+        }
+        controller.close();
+        return;
+      }
 
-  await supabase.from("ai_logs").insert({
-    writer_id,
-    memo_id,
-    prompt_text,
-    pdf_attached: !!pdf_attached,
-    ai_response_text: result.text,
+      try {
+        await supabase.from("ai_logs").insert({
+          writer_id,
+          memo_id,
+          prompt_text,
+          pdf_attached: !!pdf_attached,
+          ai_response_text: accumulated,
+        });
+      } catch (e) {
+        console.error("[ai-generate] ai_logs insert failed", e);
+      }
+
+      write({
+        type: "done",
+        full_text: accumulated,
+        pdf_attached_to_model: !!pdfPart,
+        pdf_fetch_failed: pdfFetchFailed,
+        finish_reason: finishReason ?? null,
+        notice:
+          finishReason === "MAX_TOKENS"
+            ? "AIの回答内容が長すぎたため中断しました。"
+            : null,
+      });
+      controller.close();
+    },
   });
 
-  return jsonResponse(200, {
-    ai_response_text: result.text,
-    pdf_attached_to_model: !!pdfPart,
-    pdf_fetch_failed: pdfFetchFailed,
-  });
+  return new Response(stream, { status: 200, headers: NDJSON_HEADERS });
 };

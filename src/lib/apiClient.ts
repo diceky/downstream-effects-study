@@ -29,7 +29,7 @@ export async function apiPost<T>(endpoint: string, body: unknown): Promise<T> {
   }
 
   if (!res.ok) {
-    throw new Error(data?.error || "送信中にエラーが発生しました。時間をおいて再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。");
+    throw new Error(data?.error || "送信中にエラーが発生しました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。");
   }
   return data as T;
 }
@@ -77,7 +77,7 @@ export async function apiPostStream<TMeta = Record<string, unknown>>(
     }
     throw new Error(
       data?.error ||
-        "送信中にエラーが発生しました。時間をおいて再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。"
+        "送信中にエラーが発生しました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。"
     );
   }
 
@@ -88,7 +88,7 @@ export async function apiPostStream<TMeta = Record<string, unknown>>(
   }
 
   if (!res.body) {
-    throw new Error("AIからの応答を取得できませんでした。時間をおいて再度お試しください。");
+    throw new Error("AIからの応答を取得できませんでした。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。");
   }
 
   const reader = res.body.getReader();
@@ -128,7 +128,7 @@ export async function apiPostStream<TMeta = Record<string, unknown>>(
         } else if (frame?.type === "error") {
           throw new Error(
             frame?.error ||
-              "AIドラフトの生成に失敗しました。時間をおいて再度お試しください。"
+              "AIドラフトの生成に失敗しました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。"
           );
         }
       }
@@ -142,7 +142,7 @@ export async function apiPostStream<TMeta = Record<string, unknown>>(
   }
 
   if (!doneSignal) {
-    throw new Error("AIからの応答が途中で切断されました。時間をおいて再度お試しください。");
+    throw new Error("AIからの応答が途中で切断されました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。");
   }
 
   return { full, meta: (meta ?? ({} as TMeta)) };

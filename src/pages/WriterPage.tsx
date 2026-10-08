@@ -7,7 +7,7 @@ import WriterSurvey from "../components/WriterSurvey";
 import MarkdownEditor from "../components/MarkdownEditor";
 import MarkdownRenderer from "../components/MarkdownRenderer";
 import Spinner from "../components/Spinner";
-import { apiPost, apiPostStream } from "../lib/apiClient";
+import { apiPost } from "../lib/apiClient";
 import { createWordDiffLogger, WordDiffLogger } from "../lib/wordDiffLogger";
 
 const CONSENT_VERSION = "v1_mvp";
@@ -64,6 +64,7 @@ export default function WriterPage() {
   >([]);
   const [pdfAttached, setPdfAttached] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [slowAiNotice, setSlowAiNotice] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
   const [debugLogs, setDebugLogs] = useState<any[]>([]);
 
@@ -88,6 +89,15 @@ export default function WriterPage() {
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [aiPrompt, writingPhase, step]);
+
+  useEffect(() => {
+    if (!aiLoading) {
+      setSlowAiNotice(false);
+      return;
+    }
+    const id = setTimeout(() => setSlowAiNotice(true), 15_000);
+    return () => clearTimeout(id);
+  }, [aiLoading]);
 
   const writerRef = useRef(writer);
   const memoIdRef = useRef(memoId);
@@ -276,29 +286,20 @@ export default function WriterPage() {
     const sentPrompt = aiPrompt;
     setAiResponse("");
     try {
-      let acc = "";
-      const { full, meta } = await apiPostStream<{
+      const { full_text, notice } = await apiPost<{
+        full_text: string;
         pdf_attached_to_model?: boolean;
         pdf_fetch_failed?: boolean;
         finish_reason?: string | null;
         notice?: string | null;
-      }>(
-        "ai-generate",
-        {
-          writer_id: writer.writer_id,
-          memo_id: memoId,
-          prompt_text: sentPrompt,
-          pdf_attached: pdfAttached,
-          history: chatHistory,
-        },
-        {
-          onDelta: (chunk) => {
-            acc += chunk;
-            setAiResponse(acc);
-          },
-        }
-      );
-      const finalText = full || acc;
+      }>("ai-generate", {
+        writer_id: writer.writer_id,
+        memo_id: memoId,
+        prompt_text: sentPrompt,
+        pdf_attached: pdfAttached,
+        history: chatHistory,
+      });
+      const finalText = full_text || "";
       setAiResponse(finalText);
       setChatHistory((prev) =>
         [
@@ -318,8 +319,8 @@ export default function WriterPage() {
         targetKey: "ai_response",
         metadata: { mode: writer.condition, eventType: "ai_response_received" },
       });
-      if (meta?.notice) {
-        setError(meta.notice);
+      if (notice) {
+        setError(notice);
       }
     } catch (e: any) {
       setError(e?.message ?? "AIドラフトの生成に失敗しました。");
@@ -698,10 +699,15 @@ export default function WriterPage() {
                     )}
                   </button>
                 </div>
+                {aiLoading && slowAiNotice && (
+                  <p style={{ fontSize: 13, color: "#6b7280", marginTop: 8 }}>
+                    最大30秒かかる場合があります。
+                  </p>
+                )}
                 {error && <p style={{ color: "crimson" }}>{error}</p>}
                 {aiResponse && (
                   <div style={{ marginTop: 12, opacity: aiLoading ? 0.5 : 1, transition: "opacity 0.2s" }}>
-                    <label>AI生成結果</label>
+                    <label>AIからの応答</label>
                     <MarkdownRenderer
                       source={aiResponse}
                       style={{

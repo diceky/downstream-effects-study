@@ -29,7 +29,7 @@ export const handler: Handler = async (event) => {
     .maybeSingle();
 
   if (error) {
-    return jsonResponse(500, { error: "送信中にエラーが発生しました。時間をおいて再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。" });
+    return jsonResponse(500, { error: "送信中にエラーが発生しました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。" });
   }
   if (!data) {
     return jsonResponse(404, {

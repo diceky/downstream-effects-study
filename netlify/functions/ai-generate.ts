@@ -19,20 +19,14 @@ interface Body {
 
 const MAX_HISTORY_MESSAGES = 50;
 
-// Fires before Netlify Functions' 30 s wall-clock limit so we can emit a
-// graceful timeout frame instead of being killed mid-stream.
+// Abort the Gemini call before Netlify Functions' 30 s wall-clock limit so we
+// can return a clean timeout error instead of being killed.
 const SELF_TIMEOUT_MS = 28_000;
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 const SYSTEM_INSTRUCTION =
-  "あなたは社内のAI研修プログラムの学びをまとめる支援アシスタントです。日本語での簡潔なメモのドラフト作成を支援してください。";
-
-const NDJSON_HEADERS: HeadersInit = {
-  "Content-Type": "application/x-ndjson; charset=utf-8",
-  "Cache-Control": "no-cache, no-transform",
-  "X-Accel-Buffering": "no",
-};
+  "あなたは社内のAI研修プログラムの学びをまとめるアシスタントです。日本語での簡潔なメモのドラフト作成を支援してください。";
 
 interface GeminiPart {
   text?: string;
@@ -171,7 +165,18 @@ export default async (req: Request, _context: Context): Promise<Response> => {
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     GEMINI_MODEL
-  )}:streamGenerateContent?alt=sse&key=${encodeURIComponent(geminiKey)}`;
+  )}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+
+  // Abort before Netlify's 30 s wall-clock limit (or if the client disconnects)
+  // so we can return a clean timeout error instead of being killed.
+  const ac = new AbortController();
+  const onParentAbort = () => ac.abort();
+  req.signal.addEventListener("abort", onParentAbort);
+  const timeoutHandle = setTimeout(() => ac.abort(), SELF_TIMEOUT_MS);
+  const cleanup = () => {
+    clearTimeout(timeoutHandle);
+    req.signal.removeEventListener("abort", onParentAbort);
+  };
 
   let upstream: Response;
   try {
@@ -191,193 +196,96 @@ export default async (req: Request, _context: Context): Promise<Response> => {
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
-      signal: req.signal,
+      signal: ac.signal,
     });
   } catch (e) {
+    cleanup();
+    if (ac.signal.aborted) {
+      console.error("[ai-generate] request aborted (timeout)", e);
+      return jsonError(
+        504,
+        "AIの応答がタイムアウトになりました。もう一度お試しください。"
+      );
+    }
     console.error("[ai-generate] network error", e);
     return jsonError(
       502,
-      "AIへの通信に失敗しました。時間をおいて再度お試しください。"
+      "AIへの通信に失敗しました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。"
     );
   }
 
-  if (!upstream.ok || !upstream.body) {
-    try {
-      const errText = await upstream.text();
-      console.error(
-        "[ai-generate] upstream non-2xx",
-        upstream.status,
-        errText.slice(0, 500)
+  let bodyJson: any = null;
+  try {
+    bodyJson = await upstream.json();
+  } catch (e) {
+    cleanup();
+    console.error("[ai-generate] failed to parse upstream JSON", e);
+    return jsonError(
+      502,
+      "AIドラフトの生成に失敗しました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。"
+    );
+  }
+  cleanup();
+
+  if (!upstream.ok) {
+    console.error(
+      "[ai-generate] upstream non-2xx",
+      upstream.status,
+      JSON.stringify(bodyJson).slice(0, 500)
+    );
+    return jsonError(
+      502,
+      "AIドラフトの生成に失敗しました。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。"
+    );
+  }
+
+  const accumulated = extractTextFromChunk(bodyJson);
+  const finishReason = extractFinishReason(bodyJson);
+
+  if (!accumulated) {
+    console.error("[ai-generate] AI returned empty text", {
+      finishReason,
+      body: JSON.stringify(bodyJson).slice(0, 500),
+    });
+    if (
+      finishReason === "SAFETY" ||
+      finishReason === "BLOCKLIST" ||
+      finishReason === "RECITATION"
+    ) {
+      return jsonError(
+        422,
+        "依頼内容がAIの安全フィルターによりブロックされました。表現を変えて再度お試しください。"
       );
-    } catch {
-      console.error("[ai-generate] upstream non-2xx", upstream.status);
     }
     return jsonError(
       502,
-      "AIドラフトの生成に失敗しました。時間をおいて再度お試しください。"
+      "AIから有効な応答が得られませんでした。再度お試しください。問題が続く場合は、研究担当者（Dice）までご連絡ください。"
     );
   }
 
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  const upstreamBody = upstream.body;
+  try {
+    await supabase.from("ai_logs").insert({
+      writer_id,
+      memo_id,
+      prompt_text,
+      pdf_attached: !!pdf_attached,
+      ai_response_text: accumulated,
+    });
+  } catch (e) {
+    console.error("[ai-generate] ai_logs insert failed", e);
+  }
 
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const write = (obj: unknown) => {
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
-      };
-
-      let accumulated = "";
-      let finishReason: string | undefined;
-      let sseBuffer = "";
-      let streamErrored = false;
-      let timedOut = false;
-      let chunksSeen = 0;
-
-      const reader = upstreamBody.getReader();
-      const timeoutHandle = setTimeout(() => {
-        timedOut = true;
-        reader.cancel().catch(() => {
-          /* ignore */
-        });
-      }, SELF_TIMEOUT_MS);
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          sseBuffer += decoder.decode(value, { stream: true });
-          // Normalize CRLF so `\n\n` frame separator matches regardless of upstream.
-          sseBuffer = sseBuffer.replace(/\r\n/g, "\n");
-
-          // SSE frames are separated by blank lines; concatenate multiple
-          // `data:` lines within a single frame.
-          let sepIdx: number;
-          while ((sepIdx = sseBuffer.indexOf("\n\n")) !== -1) {
-            const rawFrame = sseBuffer.slice(0, sepIdx);
-            sseBuffer = sseBuffer.slice(sepIdx + 2);
-
-            const dataLines: string[] = [];
-            for (const line of rawFrame.split("\n")) {
-              if (line.startsWith("data:")) {
-                dataLines.push(line.slice(5).replace(/^\s/, ""));
-              }
-            }
-            if (dataLines.length === 0) continue;
-            const payload = dataLines.join("\n");
-            if (!payload || payload === "[DONE]") continue;
-
-            let parsed: any;
-            try {
-              parsed = JSON.parse(payload);
-            } catch (e) {
-              console.error("[ai-generate] failed to parse SSE payload", e, payload.slice(0, 200));
-              continue;
-            }
-
-            chunksSeen += 1;
-            const delta = extractTextFromChunk(parsed);
-            const fr = extractFinishReason(parsed);
-            if (fr) finishReason = fr;
-
-            if (delta) {
-              accumulated += delta;
-              write({ type: "delta", text: delta });
-            } else if (chunksSeen <= 2) {
-              console.log(
-                "[ai-generate] chunk without text",
-                JSON.stringify(parsed).slice(0, 500)
-              );
-            }
-          }
-        }
-      } catch (e) {
-        if (timedOut) {
-          console.error("[ai-generate] self-imposed timeout fired", {
-            chunksSeen,
-            accumulatedLen: accumulated.length,
-          });
-          streamErrored = true;
-          write({
-            type: "error",
-            error:
-              "AIの応答がタイムアウトになりました。もう一度お試しください。",
-          });
-        } else {
-          console.error("[ai-generate] stream read error", e);
-          streamErrored = true;
-          write({
-            type: "error",
-            error:
-              "AIからの応答が途中で切断されました。時間をおいて再度お試しください。",
-          });
-        }
-      } finally {
-        clearTimeout(timeoutHandle);
-        try {
-          reader.releaseLock();
-        } catch {
-          /* ignore */
-        }
-      }
-
-      if (streamErrored) {
-        controller.close();
-        return;
-      }
-
-      if (!accumulated) {
-        console.error(
-          "[ai-generate] AI returned empty text",
-          { finishReason, chunksSeen, bufferTail: sseBuffer.slice(-200) }
-        );
-        if (
-          finishReason === "SAFETY" ||
-          finishReason === "BLOCKLIST" ||
-          finishReason === "RECITATION"
-        ) {
-          write({
-            type: "error",
-            error:
-              "依頼内容がAIの安全フィルターによりブロックされました。表現を変えて再度お試しください。",
-          });
-        } else {
-          write({
-            type: "error",
-            error:
-              "AIから有効な応答が得られませんでした。時間をおいて再度お試しください。",
-          });
-        }
-        controller.close();
-        return;
-      }
-
-      try {
-        await supabase.from("ai_logs").insert({
-          writer_id,
-          memo_id,
-          prompt_text,
-          pdf_attached: !!pdf_attached,
-          ai_response_text: accumulated,
-        });
-      } catch (e) {
-        console.error("[ai-generate] ai_logs insert failed", e);
-      }
-
-      write({
-        type: "done",
-        full_text: accumulated,
-        pdf_attached_to_model: !!pdfPart,
-        pdf_fetch_failed: pdfFetchFailed,
-        finish_reason: finishReason ?? null,
-        notice:
-          finishReason === "MAX_TOKENS"
-            ? "AIの回答内容が長すぎたため中断しました。"
-            : null,
-      });
-      controller.close();
-    },
-  });
-
-  return new Response(stream, { status: 200, headers: NDJSON_HEADERS });
+  return new Response(
+    JSON.stringify({
+      full_text: accumulated,
+      pdf_attached_to_model: !!pdfPart,
+      pdf_fetch_failed: pdfFetchFailed,
+      finish_reason: finishReason ?? null,
+      notice:
+        finishReason === "MAX_TOKENS"
+          ? "AIの回答内容が長すぎたため中断しました。"
+          : null,
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } }
+  );
 };

@@ -74,15 +74,10 @@ export default function SourceMaterials({
                 checked={!!pdfAttached}
                 onChange={(e) => onTogglePdfAttachment(e.target.checked)}
               />
-              <span style={{ marginLeft: 6 }}>プロンプトに概要PDFを添付する</span>
+              <span style={{ marginLeft: 6 }}>
+                プログラムの概要PDFをプロンプトに{pdfAttached ? "添付済み" : "添付する"}
+              </span>
             </label>
-            {pdfAttached && (
-              <div style={{ marginTop: 4 }}>
-                <span style={{ background: "#e0e7ff", padding: "2px 6px", borderRadius: 4 }}>
-                  添付中：Program Overview PDF
-                </span>
-              </div>
-            )}
           </div>
         )}
       </section>

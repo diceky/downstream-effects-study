@@ -27,17 +27,6 @@ function stripLeadingSpaces(input: string): string {
   return input.replace(/^[ \t]+/gm, "");
 }
 
-// Neutralize `---`/`===` divider lines so they don't become setext headings
-// (which would make the preceding line render as an oversized H1/H2) or HRs.
-function neutralizeSetextAndHr(input: string): string {
-  return input.replace(/^[-=_*]{3,}\s*$/gm, "");
-}
-
-// Escape ATX headings (`# ...`) so `#` renders as literal text, not a heading.
-function escapeAtxHeadings(input: string): string {
-  return input.replace(/^(#{1,6})(\s)/gm, (_m, hashes: string, space: string) => `\\${hashes}${space}`);
-}
-
 // Slack allows ``` to open/close code blocks mid-line; standard markdown needs
 // the fence on its own line. Insert newlines around every ``` so both open and
 // close fences are recognized.
@@ -48,11 +37,7 @@ function normalizeTripleBacktickFences(input: string): string {
 }
 
 function preprocessSlack(input: string): string {
-  return convertSlackBold(
-    escapeAtxHeadings(
-      neutralizeSetextAndHr(normalizeTripleBacktickFences(stripLeadingSpaces(input)))
-    )
-  );
+  return convertSlackBold(normalizeTripleBacktickFences(stripLeadingSpaces(input)));
 }
 
 export default function MarkdownRenderer({ source, style, className, slackFlavored }: Props) {

@@ -124,7 +124,7 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
 
       <div style={{ marginTop: 16 }}>
         <label>
-          このメモを読んだ同僚に、最も持ち帰ってもらいたいポイントを一つ選ぶとしたら、何ですか？
+          このメモを読んだ同僚に、最も持ち帰ってもらいたいポイントを一つ選ぶとしたら、何ですか？一つだけ、短い文で書いてください。
           <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
           <textarea
             value={keyTakeaway}

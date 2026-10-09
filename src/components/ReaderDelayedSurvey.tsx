@@ -67,7 +67,7 @@ function Likert({
 }
 
 export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props) {
-  const [remembered, setRemembered] = useState("");
+  const [remembered, setRemembered] = useState<string[]>(["", "", ""]);
   const [change, setChange] = useState<number | null>(null);
   const [changeDetail, setChangeDetail] = useState("");
   const [comments, setComments] = useState("");
@@ -83,29 +83,36 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
   };
 
   const allRequiredAnswered =
-    remembered.trim() !== "" &&
     change !== null &&
     changeDetail.trim() !== "";
 
   return (
     <form onSubmit={submit} style={{ maxWidth: 1040 }}>
-      <h2>フォローアップアンケート</h2>
+      <h2>Delayed Reader Survey</h2>
       <p>
-        このアンケートでは、2週間前に読んだAIプロトタイピングプログラムの共有メモについて現在覚えている内容や、そのメモがあなたの考え方や業務に及ぼした影響についてお聞きします。
-        <b>メモは再表示されません。</b>覚えている範囲で回答してください。
+        {/* このアンケートでは、2週間前に読んだAIプロトタイピングプログラムの共有メモについて現在覚えている内容や、そのメモがあなたの考え方や業務に及ぼした影響についてお聞きします。 */}
+        メモは再表示されません。覚えている範囲で回答してください。
       </p>
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 32, marginBottom: 32 }}>
         <label>
-          そのメモで伝えられていた主なポイントとして、覚えていることはありますか？可能であれば3点まで挙げてください。
-          <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
-          <textarea
-            value={remembered}
-            onChange={(e) => setRemembered(e.target.value)}
-            required
-            style={{ width: "100%", minHeight: 80, marginTop: 4 }}
-          />
+          2週間前に読んだメモに書かれていた内容として、覚えていることを最大3つまで書いてください。できるだけ具体的に、1つの欄につき1つの内容を短い文で書いてください。正確な表現を覚えている必要はなく、思い出せる範囲で構いません。無ければ空欄のままで構いません。
+          <span style={{ color: "#6b7280", marginLeft: 4 }}>（任意）</span>
         </label>
+        {remembered.map((val, i) => (
+          <input
+            key={i}
+            type="text"
+            value={val}
+            onChange={(e) =>
+              setRemembered((prev) =>
+                prev.map((p, j) => (j === i ? e.target.value : p))
+              )
+            }
+            placeholder={`覚えていること ${i + 1}`}
+            style={{ width: "100%", marginTop: 8 }}
+          />
+        ))}
       </div>
 
       <Likert
@@ -115,7 +122,7 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
         onChange={setChange}
       />
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 32 }}>
         <label>
           変化があった場合、どのような点が変わりましたか？できるだけ具体的に教えてください。また、あまり変わっていない、またはまったく変わっていない場合は、その理由を教えてください。
           <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
@@ -128,9 +135,9 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
         </label>
       </div>
 
-      <div style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 32 }}>
         <label>
-          その他、コメントがあれば記入してください。
+          その他、コメントがあれば自由にご記入ください。
           <span style={{ color: "#6b7280", marginLeft: 4 }}>（任意）</span>
           <textarea
             value={comments}
@@ -146,7 +153,7 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
         disabled={loading || !allRequiredAnswered}
         style={{ marginTop: 16, padding: "8px 16px" }}
       >
-        {loading ? "送信中..." : "フォローアップアンケートを提出する"}
+        {loading ? "送信中..." : "アンケートを提出する"}
       </button>
     </form>
   );

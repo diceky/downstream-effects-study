@@ -68,7 +68,7 @@ function Likert({
 }
 
 export default function ReaderImmediateSurvey({ onSubmit, loading, error, writerName }: Props) {
-  const [mainPoint, setMainPoint] = useState("");
+  const [mainPoint, setMainPoint] = useState<string[]>(["", "", ""]);
   const [relevance, setRelevance] = useState("");
   const [teamAwareness, setTeamAwareness] = useState("");
   const [clarity, setClarity] = useState<number | null>(null);
@@ -98,7 +98,7 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
   };
 
   const allRequiredAnswered =
-    mainPoint.trim() !== "" &&
+    mainPoint[0].trim() !== "" &&
     relevance.trim() !== "" &&
     teamAwareness.trim() !== "" &&
     clarity !== null &&
@@ -111,11 +111,6 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
     authorInfluence !== null;
 
   const textQuestions: { label: string; value: string; setter: (v: string) => void }[] = [
-    {
-      label: "このメモを通して、作成者があなた、もしくはチームに一番伝えたかったポイントは何だと思いますか？",
-      value: mainPoint,
-      setter: setMainPoint,
-    },
     {
       label: "ご自身の業務に照らして、特に関連がありそうだと感じた点はありますか？あれば教えてください。",
       value: relevance,
@@ -130,13 +125,35 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
 
   return (
     <form onSubmit={submit} style={{ maxWidth: 1040 }}>
-      <h2>メモ閲覧後アンケート</h2>
+      <h2>Immediate Reader Survey</h2>
       <p>
         以下の質問には、先ほど読んだメモについて、あなた自身の理解や解釈に基づいて回答してください。メモはこの画面では表示されません。
       </p>
 
+      <div style={{ marginTop: 32 }}>
+        <label>
+          このメモで、作成者が伝えたかったと思うことを、最大3つまで書いてください。できるだけ具体的に、1つの欄につき1つの内容を短い文で書いてください。二つ目以降は無ければ空欄のままで構いません。
+          <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
+        </label>
+        {mainPoint.map((val, i) => (
+          <input
+            key={i}
+            type="text"
+            value={val}
+            onChange={(e) =>
+              setMainPoint((prev) =>
+                prev.map((p, j) => (j === i ? e.target.value : p))
+              )
+            }
+            required={i === 0}
+            placeholder={`伝えたかったと思うこと ${i + 1}`}
+            style={{ width: "100%", marginTop: 8 }}
+          />
+        ))}
+      </div>
+
       {textQuestions.map((q, i) => (
-        <div key={i} style={{ marginTop: 12 }}>
+        <div key={i} style={{ marginTop: 32 }}>
           <label>
             {q.label}
             <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
@@ -176,7 +193,7 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
       />
       <Likert
         name="other_reference"
-        label="メモの内容は書き手自身の経験・視点・気づきが含まれていると感じた。"
+        label="メモの内容は書き手ならではの経験・視点・気づきが含まれていると感じた。"
         value={otherReference}
         onChange={setOtherReference}
       />

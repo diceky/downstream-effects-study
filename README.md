@@ -1,6 +1,6 @@
-# Downstream Effects Study — MVP
+# Downstream Effects Study Interface
 
-Minimal Vite + React frontend with Netlify Functions backend and Supabase storage for a two-flow research study (Writer / Reader).
+Minimal Vite + React frontend with Netlify Functions backend and Supabase storage for a two-flow research study (Memo Writer / Reader).
 
 ## Stack
 
@@ -29,8 +29,6 @@ Minimal Vite + React frontend with Netlify Functions backend and Supabase storag
    ADMIN_PASSWORD=...        # required to access /admin
    ```
 
-   The admin page lives at `/admin` and is gated by `ADMIN_PASSWORD`. It supports creating/editing/deleting writers and readers, resetting their progress, and viewing submitted memos.
-
 4. Install the Netlify CLI if needed:
 
    ```bash
@@ -49,6 +47,7 @@ Minimal Vite + React frontend with Netlify Functions backend and Supabase storag
 
 - `/writer` — Memo Writer flow
 - `/reader` — Downstream Reader flow (immediate or delayed depending on lookup)
+- `/admin`  - Supports creating/editing/deleting writers and readers, resetting their progress, and viewing submitted memos. Gated by `ADMIN_PASSWORD`.
 
 ## Seeding test data
 

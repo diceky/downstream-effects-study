@@ -484,7 +484,7 @@ export default function WriterPage() {
           <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>メモに含めて頂きたいこと</h3>
           <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
             <li style={{ marginBottom: 8 }}>プログラムを通して得た学び</li>
-            <li style={{ marginBottom: 8 }}>チーム／部署にとっての気付き</li>
+            <li style={{ marginBottom: 8 }}>ご自身のチームや部署にとっての気付き</li>
             <li style={{ marginBottom: 8 }}>今日からできること／変えられること</li>
           </ul>
 
@@ -645,7 +645,7 @@ export default function WriterPage() {
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 20 }}>
                     <li>プログラムを通して得た学び</li>
-                    <li>チーム／部署にとっての気付き</li>
+                    <li>ご自身のチームや部署にとっての気付き</li>
                     <li>今日からできること／変えられること</li>
                   </ul>
                 </div>
@@ -754,7 +754,7 @@ export default function WriterPage() {
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 20 }}>
                     <li>プログラムを通して得た学び</li>
-                    <li>チーム／部署にとっての気付き</li>
+                    <li>ご自身のチームや部署にとっての気付き</li>
                     <li>今日からできること／変えられること</li>
                   </ul>
                 </div>

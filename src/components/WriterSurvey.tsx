@@ -249,13 +249,13 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
         <>
           <Likert
             name="ai_helpful"
-            label="AIアシスタントは、メモ作成に役立った。"
+            label="AIはメモ作成に役立った。"
             value={aiHelpful}
             onChange={setAiHelpful}
           />
           <Likert
             name="ai_reliance"
-            label="最終的なメモ内容は、AIが生成したドラフトに大きく影響を受けている。"
+            label="最終的なメモは、AIが生成したドラフトに大きく影響を受けている。"
             value={aiReliance}
             onChange={setAiReliance}
           />
@@ -264,7 +264,7 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
 
       <div style={{ marginTop: 16 }}>
         <label>
-          その他、コメントがあれば記入してください。
+          その他、コメントがあれば自由にご記入ください。
           <span style={{ color: "#6b7280", marginLeft: 4 }}>（任意）</span>
           <textarea
             value={comments}

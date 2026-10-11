@@ -78,6 +78,7 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
   const [deptKnowledge, setDeptKnowledge] = useState<number | null>(null);
   const [selfReference, setSelfReference] = useState<number | null>(null);
   const [otherReference, setOtherReference] = useState<number | null>(null);
+  const [aiUse, setAiUse] = useState<number | null>(null);
   const [authorInfluence, setAuthorInfluence] = useState<number | null>(null);
 
   const submit = async (e: FormEvent) => {
@@ -93,6 +94,7 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
       dept_knowledge: deptKnowledge,
       self_reference: selfReference,
       other_reference: otherReference,
+      AI_use: aiUse,
       author_influence: authorInfluence,
     });
   };
@@ -108,6 +110,7 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
     deptKnowledge !== null &&
     selfReference !== null &&
     otherReference !== null &&
+    aiUse !== null &&
     authorInfluence !== null;
 
   const textQuestions: { label: string; value: string; setter: (v: string) => void }[] = [
@@ -196,6 +199,12 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
         label="メモの内容は書き手ならではの経験・視点・気づきが含まれていると感じた。"
         value={otherReference}
         onChange={setOtherReference}
+      />
+      <Likert
+        name="AI_use"
+        label="このメモの作成にはAIが用いられているように感じた。"
+        value={aiUse}
+        onChange={setAiUse}
       />
       <Likert
         name="closeness"

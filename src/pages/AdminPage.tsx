@@ -76,6 +76,7 @@ interface WriterDraft {
 interface ReaderDraft {
   reader_id: string;
   email: string;
+  writer_id: string;
   assigned_memo_id: string;
 }
 
@@ -101,8 +102,20 @@ function emptyReaderDraft(): ReaderDraft {
   return {
     reader_id: "",
     email: "",
+    writer_id: "",
     assigned_memo_id: "",
   };
+}
+
+function memoFirstLine(text: string | null): string {
+  if (!text) return "(本文なし)";
+  const line =
+    text
+      .split("\n")
+      .map((s) => s.trim())
+      .find((s) => s.length > 0) ?? "";
+  if (!line) return "(本文なし)";
+  return line.length > 60 ? line.slice(0, 60) + "…" : line;
 }
 
 function reflectionsToDraft(
@@ -209,13 +222,23 @@ export default function AdminPage() {
     if (authed) refresh();
   }, [authed, refresh]);
 
-  const memoOptions = useMemo(
+  const writerIdsWithMemos = useMemo(
     () =>
-      memos.map((m) => ({
-        value: m.memo_id,
-        label: `${m.memo_id} (writer ${m.writer_id})`,
-      })),
+      Array.from(new Set(memos.map((m) => m.writer_id))).sort((a, b) =>
+        a.localeCompare(b)
+      ),
     [memos]
+  );
+
+  const filteredMemoOptions = useMemo(
+    () =>
+      memos
+        .filter((m) => m.writer_id === readerDraft.writer_id)
+        .map((m) => ({
+          value: m.memo_id,
+          label: `${m.memo_id} — ${memoFirstLine(m.final_memo_text)}`,
+        })),
+    [memos, readerDraft.writer_id]
   );
 
   const sortedWriters = useMemo(
@@ -310,6 +333,7 @@ export default function AdminPage() {
     setReaderDraft({
       reader_id: r.reader_id,
       email: r.email,
+      writer_id: r.assigned_writer_id,
       assigned_memo_id: r.assigned_memo_id,
     });
     setStatus(null);
@@ -745,24 +769,45 @@ export default function AdminPage() {
               />
             </label>
             <label>
+              assigned_memo_writer
+              <select
+                value={readerDraft.writer_id}
+                onChange={(e) =>
+                  setReaderDraft({
+                    ...readerDraft,
+                    writer_id: e.target.value,
+                    assigned_memo_id: "",
+                  })
+                }
+                required
+                style={{ width: "100%", padding: 6 }}
+              >
+                <option value="">（未選択）</option>
+                {writerIdsWithMemos.map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               assigned_memo_id
-              <input
-                type="text"
-                list="memo-options"
+              <select
                 value={readerDraft.assigned_memo_id}
                 onChange={(e) =>
                   setReaderDraft({ ...readerDraft, assigned_memo_id: e.target.value })
                 }
                 required
+                disabled={!readerDraft.writer_id}
                 style={{ width: "100%", padding: 6 }}
-              />
-              <datalist id="memo-options">
-                {memoOptions.map((m) => (
+              >
+                <option value="">（未選択）</option>
+                {filteredMemoOptions.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>
                 ))}
-              </datalist>
+              </select>
             </label>
           </div>
 

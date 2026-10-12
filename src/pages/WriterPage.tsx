@@ -14,6 +14,7 @@ const CONSENT_VERSION = "v1_mvp";
 const TASK_DURATION_SECONDS = 15 * 60;
 const AI_PHASE_DURATION_SECONDS = 10 * 60;
 const MANUAL_PHASE_DURATION_SECONDS = 5 * 60;
+const SHOW_DEBUG_LOGS = false;
 
 type WritingPhase = "ai_prompt" | "manual_edit";
 
@@ -143,6 +144,7 @@ export default function WriterPage() {
   }, [logger]);
 
   useEffect(() => {
+    if (!SHOW_DEBUG_LOGS) return;
     const id = setInterval(() => setDebugLogs(logger.getBuffer()), 500);
     return () => clearInterval(id);
   }, [logger]);
@@ -890,6 +892,7 @@ export default function WriterPage() {
         </div>
       )}
 
+      {SHOW_DEBUG_LOGS && (
       <div
         style={{
           position: "fixed",
@@ -942,6 +945,7 @@ export default function WriterPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

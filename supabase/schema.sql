@@ -113,3 +113,12 @@ alter table writers add column if not exists current_session_id text;
 
 -- Condition is now assigned randomly on first writer-lookup; allow nulls until then.
 alter table writers alter column condition drop not null;
+
+-- Row Level Security: enabled on every table with NO policies, so the anon and
+-- authenticated roles get zero access. All DB access goes through the Netlify
+-- functions using the service_role key, which bypasses RLS.
+alter table writers        enable row level security;
+alter table memos          enable row level security;
+alter table readers        enable row level security;
+alter table ai_logs        enable row level security;
+alter table word_diff_logs enable row level security;

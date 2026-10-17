@@ -53,7 +53,7 @@ export const handler: Handler = async (event) => {
     }
     const { data: writer } = await supabase
       .from("writers")
-      .select("name")
+      .select("email")
       .eq("writer_id", reader.assigned_writer_id)
       .maybeSingle();
     return jsonResponse(200, {
@@ -63,7 +63,7 @@ export const handler: Handler = async (event) => {
       assigned_writer_id: reader.assigned_writer_id,
       status: reader.status,
       memo_text: memo.final_memo_text,
-      writer_name: writer?.name ?? null,
+      writer_email: writer?.email ?? null,
       pis_signed_url: await signStudyMaterialUrl(READER_PIS_PATH),
     });
   }

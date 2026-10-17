@@ -7,6 +7,48 @@ interface Props {
   writerName?: string | null;
 }
 
+const GENDER_OPTIONS = ["男性", "女性", "ノンバイナリー", "その他", "回答しない"];
+const AGE_OPTIONS = ["20代", "30代", "40代", "50代", "60代", "70代以上", "回答しない"];
+
+function RadioGroup({
+  name,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <fieldset style={{ marginTop: 16, border: "1px solid #eee", padding: 8 }}>
+      <legend>
+        {label}
+        <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
+      </legend>
+      {options.map((v) => (
+        <label
+          key={v}
+          style={{ marginRight: 32, display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <input
+            type="radio"
+            name={name}
+            value={v}
+            checked={value === v}
+            onChange={() => onChange(v)}
+            required
+          />
+          {v}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 function Likert({
   name,
   label,
@@ -68,6 +110,8 @@ function Likert({
 }
 
 export default function ReaderImmediateSurvey({ onSubmit, loading, error, writerName }: Props) {
+  const [gender, setGender] = useState("");
+  const [age, setAge] = useState("");
   const [mainPoint, setMainPoint] = useState<string[]>(["", "", ""]);
   const [relevance, setRelevance] = useState("");
   const [teamAwareness, setTeamAwareness] = useState("");
@@ -84,6 +128,8 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     await onSubmit({
+      gender,
+      age,
       main_point: mainPoint,
       relevance,
       team_awareness: teamAwareness,
@@ -100,6 +146,8 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
   };
 
   const allRequiredAnswered =
+    gender !== "" &&
+    age !== "" &&
     mainPoint[0].trim() !== "" &&
     relevance.trim() !== "" &&
     teamAwareness.trim() !== "" &&
@@ -132,6 +180,21 @@ export default function ReaderImmediateSurvey({ onSubmit, loading, error, writer
       <p>
         以下の質問には、先ほど読んだメモについて、あなた自身の理解や解釈に基づいて回答してください。メモはこの画面では表示されません。
       </p>
+
+      <RadioGroup
+        name="gender"
+        label="性別"
+        options={GENDER_OPTIONS}
+        value={gender}
+        onChange={setGender}
+      />
+      <RadioGroup
+        name="age"
+        label="年齢"
+        options={AGE_OPTIONS}
+        value={age}
+        onChange={setAge}
+      />
 
       <div style={{ marginTop: 32 }}>
         <label>

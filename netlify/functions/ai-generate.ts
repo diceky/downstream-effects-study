@@ -115,9 +115,9 @@ export default async (req: Request, _context: Context): Promise<Response> => {
     return jsonError(403, "AIアシスタントはこの条件では利用できません。");
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY_CUSTOM;
   if (!geminiKey) {
-    console.error("[ai-generate] GEMINI_API_KEY is not configured");
+    console.error("[ai-generate] GEMINI_API_KEY_CUSTOM is not configured");
     return jsonError(
       503,
       "AIサービスが利用できません。研究担当者（Dice）までご連絡ください。"
@@ -194,6 +194,7 @@ export default async (req: Request, _context: Context): Promise<Response> => {
           maxOutputTokens: 2048,
           responseMimeType: "text/plain",
           thinkingConfig: { thinkingBudget: 0 },
+          // thinkingConfig: { thinkingLevel: "low" },
         },
       }),
       signal: ac.signal,

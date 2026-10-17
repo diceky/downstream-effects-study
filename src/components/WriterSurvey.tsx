@@ -7,6 +7,48 @@ interface Props {
   error?: string | null;
 }
 
+const GENDER_OPTIONS = ["男性", "女性", "ノンバイナリー", "その他", "回答しない"];
+const AGE_OPTIONS = ["20代", "30代", "40代", "50代", "60代", "70代以上", "回答しない"];
+
+function RadioGroup({
+  name,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <fieldset style={{ marginTop: 16, border: "1px solid #eee", padding: 8 }}>
+      <legend>
+        {label}
+        <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
+      </legend>
+      {options.map((v) => (
+        <label
+          key={v}
+          style={{ marginRight: 32, display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <input
+            type="radio"
+            name={name}
+            value={v}
+            checked={value === v}
+            onChange={() => onChange(v)}
+            required
+          />
+          {v}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 function Likert({
   name,
   label,
@@ -68,6 +110,8 @@ function Likert({
 }
 
 export default function WriterSurvey({ condition, onSubmit, loading, error }: Props) {
+  const [gender, setGender] = useState("");
+  const [age, setAge] = useState("");
   const [keyTakeaway, setKeyTakeaway] = useState("");
   const [burden, setBurden] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<number | null>(null);
@@ -85,6 +129,8 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const answers: Record<string, unknown> = {
+      gender,
+      age,
       key_takeaway: keyTakeaway,
       burden,
       difficulty,
@@ -105,6 +151,8 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
   };
 
   const allRequiredAnswered =
+    gender !== "" &&
+    age !== "" &&
     keyTakeaway.trim() !== "" &&
     burden !== null &&
     difficulty !== null &&
@@ -121,6 +169,21 @@ export default function WriterSurvey({ condition, onSubmit, loading, error }: Pr
     <form onSubmit={submit} style={{ maxWidth: 1040 }}>
       <h2>メモ作成後アンケート</h2>
       <p>メモ作成タスクについて、以下の質問に回答してください。</p>
+
+      <RadioGroup
+        name="gender"
+        label="性別"
+        options={GENDER_OPTIONS}
+        value={gender}
+        onChange={setGender}
+      />
+      <RadioGroup
+        name="age"
+        label="年齢"
+        options={AGE_OPTIONS}
+        value={age}
+        onChange={setAge}
+      />
 
       <div style={{ marginTop: 16 }}>
         <label>

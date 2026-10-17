@@ -19,7 +19,7 @@ interface ImmediateLookup {
   assigned_writer_id: string;
   status: string;
   memo_text: string;
-  writer_name: string | null;
+  writer_email: string | null;
   pis_signed_url: string | null;
 }
 
@@ -57,7 +57,7 @@ export default function ReaderPage() {
 
   const [readerId, setReaderId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState<string>("");
-  const [writerName, setWriterName] = useState<string | null>(null);
+  const [writerEmail, setWriterEmail] = useState<string | null>(null);
   const [pisUrl, setPisUrl] = useState<string | null>(null);
   const [readingStartedAt, setReadingStartedAt] = useState<number | null>(null);
   const readingEndedAtRef = useRef<number | null>(null);
@@ -93,7 +93,7 @@ export default function ReaderPage() {
       if (data.route === "immediate") {
         setReaderId(data.reader_id);
         setMemoText(data.memo_text);
-        setWriterName(data.writer_name);
+        setWriterEmail(data.writer_email);
         setPisUrl(data.pis_signed_url);
         setStep("consent");
       } else if (data.route === "delayed") {
@@ -257,7 +257,7 @@ export default function ReaderPage() {
               background: "var(--color-bg)",
             }}
           >
-            {writerName && (
+            {writerEmail && (
               <div
                 style={{
                   marginBottom: 16,
@@ -268,7 +268,7 @@ export default function ReaderPage() {
                 }}
               >
                 <div style={{ fontWeight: 600, color: "#1f2937" }}>
-                  メモ作成者：{writerName}
+                  メモ作成者：{writerEmail}
                 </div>
               </div>
             )}
@@ -349,7 +349,7 @@ export default function ReaderPage() {
           onSubmit={submitImmediate}
           loading={loading}
           error={error}
-          writerName={writerName}
+          writerName={writerEmail}
         />
       )}
 
@@ -363,7 +363,7 @@ export default function ReaderPage() {
 
 引き続きご協力のほど、よろしくお願いいたします。画面を閉じていただいて問題ありません。
 
-なお、個人の任意参加を尊重するためにタスクの完了を報告頂くのはご遠慮ください。`}
+なお、個人の任意参加を尊重するためにタスクの実施を報告・推奨するのはご遠慮ください。`}
           </p>
         </div>
       )}
@@ -419,7 +419,7 @@ export default function ReaderPage() {
 
 これでタスクは完了となります、画面を閉じていただいて問題ありません。
 
-なお、個人の任意参加を尊重するためにタスクの完了を報告頂くのはご遠慮ください。`}
+なお、個人の任意参加を尊重するためにタスクの実施を報告・推奨するのはご遠慮ください。`}
           </p>
         </div>
       )}

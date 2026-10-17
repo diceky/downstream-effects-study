@@ -24,7 +24,7 @@ Minimal Vite + React frontend with Netlify Functions backend and Supabase storag
    ```text
    SUPABASE_URL=...
    SUPABASE_SERVICE_ROLE_KEY=...
-   GEMINI_API_KEY=...        # optional. Without it, ai-generate returns a stub.
+   GEMINI_API_KEY_CUSTOM=...        # optional. Without it, ai-generate returns a stub. Must NOT be named GEMINI_API_KEY: Netlify's AI Gateway seems to reserve this name
    GEMINI_MODEL=gemini-3.6-flash   # optional override
    ADMIN_PASSWORD=...        # required to access /admin
    ```

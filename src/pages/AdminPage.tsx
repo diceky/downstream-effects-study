@@ -32,7 +32,6 @@ type Condition = "human_only" | "ai_mediated";
 interface WriterRow {
   writer_id: string;
   email: string;
-  name: string | null;
   condition: Condition | null;
   status: string;
   program_overview_pdf_url: string | null;
@@ -68,7 +67,6 @@ interface ReflectionEntry {
 interface WriterDraft {
   writer_id: string;
   email: string;
-  name: string;
   program_overview_pdf_url: string;
   reflections: { activity_number: number; title: string; text: string }[];
 }
@@ -92,7 +90,6 @@ function emptyWriterDraft(): WriterDraft {
   return {
     writer_id: "",
     email: "",
-    name: "",
     program_overview_pdf_url: "",
     reflections: emptyReflections(),
   };
@@ -275,7 +272,6 @@ export default function AdminPage() {
     setWriterDraft({
       writer_id: w.writer_id,
       email: w.email,
-      name: w.name ?? "",
       program_overview_pdf_url: w.program_overview_pdf_url ?? "",
       reflections: reflectionsToDraft(w.reflections_json),
     });
@@ -297,7 +293,6 @@ export default function AdminPage() {
       await adminCall("upsert_writer", {
         writer_id: writerDraft.writer_id.trim(),
         email: writerDraft.email.trim(),
-        name: writerDraft.name.trim() || null,
         program_overview_pdf_url: writerDraft.program_overview_pdf_url.trim() || null,
         reflections_json: reflectionsFromDraft(writerDraft.reflections),
       });
@@ -479,7 +474,6 @@ export default function AdminPage() {
             <tr>
               <th style={cellStyle}>writer_id</th>
               <th style={cellStyle}>email</th>
-              <th style={cellStyle}>name</th>
               <th style={cellStyle}>condition</th>
               <th style={cellStyle}>status</th>
               <th style={cellStyle}>PDF URL</th>
@@ -492,7 +486,6 @@ export default function AdminPage() {
               <tr key={w.writer_id}>
                 <td style={cellStyle}>{w.writer_id}</td>
                 <td style={cellStyle}>{w.email}</td>
-                <td style={cellStyle}>{w.name ?? "—"}</td>
                 <td style={cellStyle}>{w.condition ?? "未割当"}</td>
                 <td style={cellStyle}>{w.status}</td>
                 <td style={cellStyle} title={w.program_overview_pdf_url ?? ""}>
@@ -519,7 +512,7 @@ export default function AdminPage() {
             ))}
             {writers.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={8}>
+                <td style={cellStyle} colSpan={7}>
                   Writerは登録されていません。
                 </td>
               </tr>
@@ -552,15 +545,6 @@ export default function AdminPage() {
                 value={writerDraft.email}
                 onChange={(e) => setWriterDraft({ ...writerDraft, email: e.target.value })}
                 required
-                style={{ width: "100%", padding: 6 }}
-              />
-            </label>
-            <label>
-              name
-              <input
-                type="text"
-                value={writerDraft.name}
-                onChange={(e) => setWriterDraft({ ...writerDraft, name: e.target.value })}
                 style={{ width: "100%", padding: 6 }}
               />
             </label>

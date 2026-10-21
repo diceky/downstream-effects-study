@@ -32,9 +32,25 @@ export const handler: Handler = async (event) => {
     return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
   }
 
-  // Assign condition (50/50) if not yet assigned. Guarded so a concurrent
-  // duplicate consent submission can't overwrite an already-assigned value.
-  const picked: Condition = Math.random() < 0.5 ? "human_only" : "ai_mediated";
+  // Assign the under-represented condition to keep the split balanced; coin-flip on a tie.
+  // Guarded so a concurrent duplicate consent submission can't overwrite an already-assigned value.
+  const { data: existingConditions, error: countErr } = await supabase
+    .from("writers")
+    .select("condition")
+    .not("condition", "is", null);
+  if (countErr) {
+    return jsonResponse(500, { error: "送信中にエラーが発生しました。" });
+  }
+  const humanCount = existingConditions?.filter((c) => c.condition === "human_only").length ?? 0;
+  const aiCount = existingConditions?.filter((c) => c.condition === "ai_mediated").length ?? 0;
+  const picked: Condition =
+    humanCount < aiCount
+      ? "human_only"
+      : aiCount < humanCount
+        ? "ai_mediated"
+        : Math.random() < 0.5
+          ? "human_only"
+          : "ai_mediated";
   const { data: assigned, error: assignErr } = await supabase
     .from("writers")
     .update({ condition: picked, updated_at: now })

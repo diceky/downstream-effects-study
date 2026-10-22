@@ -33,10 +33,12 @@ export const handler: Handler = async (event) => {
   }
 
   // Assign the under-represented condition to keep the split balanced; coin-flip on a tie.
+  // Count only completed writers so mid-task dropouts don't skew the balance.
   // Guarded so a concurrent duplicate consent submission can't overwrite an already-assigned value.
   const { data: existingConditions, error: countErr } = await supabase
     .from("writers")
     .select("condition")
+    .eq("status", "completed")
     .not("condition", "is", null);
   if (countErr) {
     return jsonResponse(500, { error: "送信中にエラーが発生しました。" });

@@ -64,6 +64,77 @@ interface ReflectionEntry {
   text: string;
 }
 
+interface ScoringScoreEntry {
+  text: string;
+  score: number;
+}
+
+interface ScoringResult {
+  scores: ScoringScoreEntry[];
+  final_score: number;
+  scored_at: string;
+}
+
+// Blinded scoring pair: no condition, email, or writer_id is ever included.
+interface ScoringPair {
+  reader_id: string;
+  writer_intent: string;
+  reader_intents: string[];
+  scoring: ScoringResult | null;
+}
+
+// Alignment scoring rubric (0-2), applied per reader-assumed-intent.
+const SCORING_RUBRIC: { score: number; label: string; desc: string }[] = [
+  {
+    score: 0,
+    label: "No match / incorrect",
+    desc: "The reader's key takeaways do not correspond to, are too vague to map, or contradicts the writer's intended message.",
+  },
+  {
+    score: 1,
+    label: "Partial / vague match",
+    desc: "The reader's key takeaways are related to the writer's intended message, but is incomplete, overly general, distorted, or missing the key detail.",
+  },
+  {
+    score: 2,
+    label: "Clear match",
+    desc: "The reader's key takeaways accurately capture the gist of the writer's intended message, even if the verbatim wording differs from the original memo.",
+  },
+];
+
+interface RecallResult {
+  scores: ScoringScoreEntry[];
+  total_score: number;
+  scored_at: string;
+}
+
+// Delayed recall pair: the writer's original memo vs the reader's recalled points.
+interface RecallPair {
+  reader_id: string;
+  memo_text: string;
+  reader_points: string[];
+  recall: RecallResult | null;
+}
+
+// Delayed recall rubric (0-2), applied per recalled point.
+const RECALL_RUBRIC: { score: number; label: string; desc: string }[] = [
+  {
+    score: 0,
+    label: "No match / incorrect",
+    desc: "The recalled statement does not correspond to any identifiable statement in the memo, is too vague to map to a specific statement, or contradicts the memo.",
+  },
+  {
+    score: 1,
+    label: "Partial / vague match",
+    desc: "The recalled statement is related to a memo point, but is incomplete, overly general, distorted, or missing the key detail.",
+  },
+  {
+    score: 2,
+    label: "Clear match",
+    desc: "The recalled statement accurately captures the gist of a specific memo point, even if the verbatim wording differs from the original memo.",
+  },
+];
+
 interface WriterDraft {
   writer_id: string;
   email: string;
@@ -181,10 +252,30 @@ export default function AdminPage() {
   const [readerDraft, setReaderDraft] = useState<ReaderDraft>(emptyReaderDraft());
   const [editingReaderId, setEditingReaderId] = useState<string | null>(null);
 
-  type Tab = "writers" | "readers" | "memos";
+  type Tab = "writers" | "readers" | "memos" | "scoring" | "recall";
   const [tab, setTab] = useState<Tab>("writers");
   const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set());
   const [reflectionsPreview, setReflectionsPreview] = useState(false);
+
+  // Scoring tab state. Pairs arrive server-shuffled and blinded; selections are
+  // keyed by reader_id as (score|null) arrays aligned with reader_intents.
+  const [scoringPairs, setScoringPairs] = useState<ScoringPair[]>([]);
+  const [scoringLoaded, setScoringLoaded] = useState(false);
+  const [scoringLoading, setScoringLoading] = useState(false);
+  const [scoringError, setScoringError] = useState<string | null>(null);
+  const [scoreSelections, setScoreSelections] = useState<Record<string, (number | null)[]>>({});
+  const [savingPairId, setSavingPairId] = useState<string | null>(null);
+  const [savedPairIds, setSavedPairIds] = useState<Set<string>>(new Set());
+
+  // Recall tab state. Pairs arrive server-shuffled; selections are keyed by
+  // reader_id as (score|null) arrays aligned with reader_points.
+  const [recallPairs, setRecallPairs] = useState<RecallPair[]>([]);
+  const [recallLoaded, setRecallLoaded] = useState(false);
+  const [recallLoading, setRecallLoading] = useState(false);
+  const [recallError, setRecallError] = useState<string | null>(null);
+  const [recallSelections, setRecallSelections] = useState<Record<string, (number | null)[]>>({});
+  const [savingRecallId, setSavingRecallId] = useState<string | null>(null);
+  const [savedRecallIds, setSavedRecallIds] = useState<Set<string>>(new Set());
 
   const toggleMemoExpanded = (memoId: string) => {
     setExpandedMemos((prev) => {
@@ -218,6 +309,144 @@ export default function AdminPage() {
   useEffect(() => {
     if (authed) refresh();
   }, [authed, refresh]);
+
+  // Load blinded, server-shuffled scoring pairs (lazily, on first tab visit;
+  // "Shuffle" refetches for a new order and picks up any saved scores).
+  const loadScoring = useCallback(async () => {
+    setScoringLoading(true);
+    setScoringError(null);
+    try {
+      const data = await adminCall<{ pairs: ScoringPair[] }>("scoring_list");
+      const pairs = data.pairs ?? [];
+      setScoringPairs(pairs);
+      // Prefill from any previously saved scoring; otherwise leave all unset.
+      setScoreSelections(
+        Object.fromEntries(
+          pairs.map((p) => [
+            p.reader_id,
+            p.reader_intents.map((text) => {
+              const saved = p.scoring?.scores?.find((s) => s.text === text);
+              return saved ? saved.score : null;
+            }),
+          ])
+        )
+      );
+      setSavedPairIds(new Set(pairs.filter((p) => p.scoring).map((p) => p.reader_id)));
+      setScoringLoaded(true);
+    } catch (e: any) {
+      setScoringError(e?.message ?? "読み込みに失敗しました。");
+      if (e?.message?.includes("認証")) setAuthed(false);
+    } finally {
+      setScoringLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authed && tab === "scoring" && !scoringLoaded && !scoringLoading) {
+      loadScoring();
+    }
+  }, [authed, tab, scoringLoaded, scoringLoading, loadScoring]);
+
+  function setPairScore(readerId: string, index: number, score: number) {
+    setScoreSelections((prev) => {
+      const next = [...(prev[readerId] ?? [])];
+      next[index] = score;
+      return { ...prev, [readerId]: next };
+    });
+    // Any change after saving marks the pair dirty until re-saved.
+    setSavedPairIds((prev) => {
+      if (!prev.has(readerId)) return prev;
+      const next = new Set(prev);
+      next.delete(readerId);
+      return next;
+    });
+  }
+
+  async function saveScoringPair(pair: ScoringPair) {
+    const selections = scoreSelections[pair.reader_id] ?? [];
+    if (selections.some((s) => s === null)) return;
+    setSavingPairId(pair.reader_id);
+    setScoringError(null);
+    try {
+      await adminCall("scoring_save", {
+        reader_id: pair.reader_id,
+        scores: pair.reader_intents.map((text, i) => ({ text, score: selections[i] })),
+      });
+      setSavedPairIds((prev) => new Set(prev).add(pair.reader_id));
+    } catch (e: any) {
+      setScoringError(e?.message ?? "保存に失敗しました。");
+    } finally {
+      setSavingPairId(null);
+    }
+  }
+
+  const loadRecall = useCallback(async () => {
+    setRecallLoading(true);
+    setRecallError(null);
+    try {
+      const data = await adminCall<{ pairs: RecallPair[] }>("recall_list");
+      const pairs = data.pairs ?? [];
+      setRecallPairs(pairs);
+      // Prefill from any previously saved recall scoring; otherwise leave all unset.
+      setRecallSelections(
+        Object.fromEntries(
+          pairs.map((p) => [
+            p.reader_id,
+            p.reader_points.map((text) => {
+              const saved = p.recall?.scores?.find((s) => s.text === text);
+              return saved ? saved.score : null;
+            }),
+          ])
+        )
+      );
+      setSavedRecallIds(new Set(pairs.filter((p) => p.recall).map((p) => p.reader_id)));
+      setRecallLoaded(true);
+    } catch (e: any) {
+      setRecallError(e?.message ?? "読み込みに失敗しました。");
+      if (e?.message?.includes("認証")) setAuthed(false);
+    } finally {
+      setRecallLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authed && tab === "recall" && !recallLoaded && !recallLoading) {
+      loadRecall();
+    }
+  }, [authed, tab, recallLoaded, recallLoading, loadRecall]);
+
+  function setRecallPointScore(readerId: string, index: number, score: number) {
+    setRecallSelections((prev) => {
+      const next = [...(prev[readerId] ?? [])];
+      next[index] = score;
+      return { ...prev, [readerId]: next };
+    });
+    // Any change after saving marks the pair dirty until re-saved.
+    setSavedRecallIds((prev) => {
+      if (!prev.has(readerId)) return prev;
+      const next = new Set(prev);
+      next.delete(readerId);
+      return next;
+    });
+  }
+
+  async function saveRecallPair(pair: RecallPair) {
+    const selections = recallSelections[pair.reader_id] ?? [];
+    if (selections.some((s) => s === null)) return;
+    setSavingRecallId(pair.reader_id);
+    setRecallError(null);
+    try {
+      await adminCall("recall_save", {
+        reader_id: pair.reader_id,
+        scores: pair.reader_points.map((text, i) => ({ text, score: selections[i] })),
+      });
+      setSavedRecallIds((prev) => new Set(prev).add(pair.reader_id));
+    } catch (e: any) {
+      setRecallError(e?.message ?? "保存に失敗しました。");
+    } finally {
+      setSavingRecallId(null);
+    }
+  }
 
   const writerIdsWithMemos = useMemo(
     () =>
@@ -265,6 +494,16 @@ export default function AdminPage() {
     setWriters([]);
     setReaders([]);
     setMemos([]);
+    setScoringPairs([]);
+    setScoringLoaded(false);
+    setScoringError(null);
+    setScoreSelections({});
+    setSavedPairIds(new Set());
+    setRecallPairs([]);
+    setRecallLoaded(false);
+    setRecallError(null);
+    setRecallSelections({});
+    setSavedRecallIds(new Set());
   }
 
   function startEditWriter(w: WriterRow) {
@@ -438,6 +677,8 @@ export default function AdminPage() {
           { id: "writers", label: "Writers", icon: "edit_note" },
           { id: "readers", label: "Readers", icon: "menu_book" },
           { id: "memos", label: "Memos", icon: "description" },
+          { id: "scoring", label: "Writer-Reader Alignment Score", icon: "score" },
+          { id: "recall", label: "Recall Score", icon: "memory" },
         ] as { id: Tab; label: string; icon: string }[]).map((t) => {
           const active = tab === t.id;
           return (
@@ -889,6 +1130,396 @@ export default function AdminPage() {
             )}
           </tbody>
         </table>
+      </section>
+      )}
+
+      {/* WRITER-READER ALIGNMENT SCORE (blinded, randomised order) */}
+      {tab === "scoring" && (
+      <section style={sectionStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <h2 style={{ margin: 0 }}>Writer-Reader Alignment Score</h2>
+          <button type="button" onClick={loadScoring} disabled={scoringLoading}>
+            <Icon name="shuffle" />
+            {scoringLoaded ? "Shuffle" : "再読み込み"}
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: "#555", marginTop: 8 }}>
+          Pairs are presented in randomised order with no condition information shown.
+          Score each of the reader's assumed intents (0–2); the highest score across the
+          reader's answers is stored as the final intent alignment score.
+        </p>
+
+        {/* Rubric legend */}
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            marginTop: 16,
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            padding: 16,
+            background: "#f8fafc",
+          }}
+        >
+          {SCORING_RUBRIC.map((r) => (
+            <div key={r.score} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+              <span style={{ fontWeight: 700, minWidth: 20 }}>{r.score}</span>
+              <span style={{ fontWeight: 600, minWidth: 200 }}>{r.label}</span>
+              <span style={{ fontSize: 13 }}>{r.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {scoringError && (
+          <p className="danger" style={{ marginTop: 16 }}>
+            {scoringError}
+          </p>
+        )}
+
+        <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
+          {scoringPairs.map((pair, idx) => {
+            const selections = scoreSelections[pair.reader_id] ?? pair.reader_intents.map(() => null);
+            const allAssigned = selections.every((s) => s !== null);
+            const finalScore = allAssigned ? Math.max(...selections) : null;
+            const isSaved = savedPairIds.has(pair.reader_id);
+            const isSaving = savingPairId === pair.reader_id;
+            return (
+              <div
+                key={pair.reader_id}
+                style={{
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 8,
+                  padding: 16,
+                  background: "var(--color-bg)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>Pair {idx + 1}</div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    {finalScore !== null && (
+                      <span style={{ fontSize: 13 }}>
+                        Final: <b>{finalScore}</b>
+                      </span>
+                    )}
+                    {isSaved && (
+                      <span style={{ color: "var(--color-success)", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <Icon name="check_circle" size={18} /> Saved
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => saveScoringPair(pair)}
+                      disabled={!allAssigned || isSaving}
+                    >
+                      <Icon name="save" /> {isSaved ? "Re-save" : "Save"}
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
+                    gap: 16,
+                  }}
+                >
+                  <div>
+                    <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>
+                      Writer's intent <span className="muted">(key_takeaway)</span>
+                    </h3>
+                    <div
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 6,
+                        padding: 12,
+                        whiteSpace: "pre-wrap",
+                        fontSize: 14,
+                        background: "#f8fafc",
+                      }}
+                    >
+                      {pair.writer_intent}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>
+                      Reader's assumed intents <span className="muted">(main_point)</span>
+                    </h3>
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {pair.reader_intents.map((intent, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            padding: 10,
+                            background: "#f8fafc",
+                          }}
+                        >
+                          <div style={{ fontSize: 14, marginBottom: 10, whiteSpace: "pre-wrap" }}>
+                            <span style={{ fontWeight: 600, marginRight: 8 }}>Answer {i + 1}</span>
+                            {intent}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {SCORING_RUBRIC.map((r) => (
+                              <label
+                                key={r.score}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  border:
+                                    selections[i] === r.score
+                                      ? "1px solid var(--color-accent)"
+                                      : "1px solid #e5e7eb",
+                                  borderRadius: 6,
+                                  padding: "4px 10px",
+                                  fontSize: 13,
+                                  cursor: "pointer",
+                                  background:
+                                    selections[i] === r.score ? "var(--color-bg)" : "transparent",
+                                }}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`score-${pair.reader_id}-${i}`}
+                                  value={r.score}
+                                  checked={selections[i] === r.score}
+                                  onChange={() => setPairScore(pair.reader_id, i, r.score)}
+                                />
+                                {r.score} — {r.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {scoringLoaded && scoringPairs.length === 0 && (
+            <p style={{ color: "#555" }}>
+              スコアリング可能なペアはまだありません。
+              (Readers need to have submitted main_point answers and their writers a key_takeaway.)
+            </p>
+          )}
+        </div>
+      </section>
+      )}
+
+      {/* DELAYED RECALL SCORE (randomised order) */}
+      {tab === "recall" && (
+      <section style={sectionStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <h2 style={{ margin: 0 }}>Recall Score</h2>
+          <button type="button" onClick={loadRecall} disabled={recallLoading}>
+            <Icon name="shuffle" />
+            {recallLoaded ? "Shuffle" : "再読み込み"}
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: "#555", marginTop: 8 }}>
+          Pairs are presented in randomised order. Score each of the reader's recalled points
+          (0–2) against the writer's original memo; the total score of all recalled claims is
+          stored as the reader's delayed recall score.
+        </p>
+
+        {/* Rubric legend */}
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            marginTop: 16,
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            padding: 16,
+            background: "#f8fafc",
+          }}
+        >
+          {RECALL_RUBRIC.map((r) => (
+            <div key={r.score} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+              <span style={{ fontWeight: 700, minWidth: 20 }}>{r.score}</span>
+              <span style={{ fontWeight: 600, minWidth: 200 }}>{r.label}</span>
+              <span style={{ fontSize: 13 }}>{r.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {recallError && (
+          <p className="danger" style={{ marginTop: 16 }}>
+            {recallError}
+          </p>
+        )}
+
+        <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
+          {recallPairs.map((pair, idx) => {
+            const selections = recallSelections[pair.reader_id] ?? pair.reader_points.map(() => null);
+            const allAssigned = selections.every((s) => s !== null);
+            const totalScore = allAssigned
+              ? selections.reduce((sum: number, s) => sum + (s as number), 0)
+              : null;
+            const isSaved = savedRecallIds.has(pair.reader_id);
+            const isSaving = savingRecallId === pair.reader_id;
+            return (
+              <div
+                key={pair.reader_id}
+                style={{
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 8,
+                  padding: 16,
+                  background: "var(--color-bg)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>Pair {idx + 1}</div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    {totalScore !== null && (
+                      <span style={{ fontSize: 13 }}>
+                        Total: <b>{totalScore}</b>
+                      </span>
+                    )}
+                    {isSaved && (
+                      <span style={{ color: "var(--color-success)", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <Icon name="check_circle" size={18} /> Saved
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => saveRecallPair(pair)}
+                      disabled={!allAssigned || isSaving}
+                    >
+                      <Icon name="save" /> {isSaved ? "Re-save" : "Save"}
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
+                    gap: 16,
+                  }}
+                >
+                  <div>
+                    <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>
+                      Writer's original memo <span className="muted">(final_memo_text)</span>
+                    </h3>
+                    <div
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 6,
+                        padding: 12,
+                        whiteSpace: "pre-wrap",
+                        fontSize: 14,
+                        background: "#f8fafc",
+                        maxHeight: 480,
+                        overflowY: "auto",
+                      }}
+                    >
+                      {pair.memo_text}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>
+                      Reader's recalled points <span className="muted">(remembered_points)</span>
+                    </h3>
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {pair.reader_points.map((point, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            padding: 10,
+                            background: "#f8fafc",
+                          }}
+                        >
+                          <div style={{ fontSize: 14, marginBottom: 10, whiteSpace: "pre-wrap" }}>
+                            <span style={{ fontWeight: 600, marginRight: 8 }}>Point {i + 1}</span>
+                            {point}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {RECALL_RUBRIC.map((r) => (
+                              <label
+                                key={r.score}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  border:
+                                    selections[i] === r.score
+                                      ? "1px solid var(--color-accent)"
+                                      : "1px solid #e5e7eb",
+                                  borderRadius: 6,
+                                  padding: "4px 10px",
+                                  fontSize: 13,
+                                  cursor: "pointer",
+                                  background:
+                                    selections[i] === r.score ? "var(--color-bg)" : "transparent",
+                                }}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`recall-${pair.reader_id}-${i}`}
+                                  value={r.score}
+                                  checked={selections[i] === r.score}
+                                  onChange={() => setRecallPointScore(pair.reader_id, i, r.score)}
+                                />
+                                {r.score} — {r.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {recallLoaded && recallPairs.length === 0 && (
+            <p style={{ color: "#555" }}>
+              スコアリング可能なペアはまだありません。
+              (Readers need to be completed with remembered_points and their writer's memo must exist.)
+            </p>
+          )}
+        </div>
       </section>
       )}
     </div>

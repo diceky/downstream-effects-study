@@ -68,6 +68,9 @@ create table if not exists readers (
   delayed_answers_json jsonb,
   delayed_submitted_at timestamptz,
 
+  -- Researcher scoring of writer-reader intent alignment (see admin "scoring" actions).
+  scoring jsonb,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -109,6 +112,7 @@ create index if not exists word_diff_logs_memo_idx on word_diff_logs (memo_id);
 -- Idempotent migrations for existing deployments.
 alter table writers add column if not exists current_memo_id text;
 alter table writers add column if not exists current_session_id text;
+alter table readers add column if not exists scoring jsonb;
 
 -- Condition is now assigned randomly on first writer-lookup; allow nulls until then.
 alter table writers alter column condition drop not null;

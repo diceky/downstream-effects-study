@@ -393,7 +393,7 @@ export default function ReaderPage() {
           <h3 style={{ fontSize: 20, marginTop: 40, marginBottom: 16 }}>本タスクにおける注意事項</h3>
           <ul style={{ marginBottom: 32, paddingLeft: 24 }}>
             <li style={{ marginBottom: 8 }}>他者と相談・会話せず、個人で実施してください。</li>
-            <li style={{ marginBottom: 8 }}>ノートPCまたはデスクトップPCを使用し、途中で中断せず一気に進めてください。</li>
+            <li style={{ marginBottom: 8 }}>途中で中断せず一気に進めてください。</li>
             <li style={{ marginBottom: 8 }}>外部のAIツールやウェブサイトを使用しないでください。</li>
           </ul>
 

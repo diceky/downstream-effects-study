@@ -18,34 +18,18 @@ function Likert({
   onChange: (v: number) => void;
 }) {
   return (
-    <fieldset style={{ marginTop: 16, border: "1px solid #eee", padding: 16 }}>
+    <fieldset style={{ marginTop: 32, border: "1px solid #eee", padding: 12 }}>
       <legend>
         {label}
         <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
       </legend>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          alignItems: "center",
-          gap: 24,
-          marginTop: 12,
-        }}
-      >
-        <span style={{ fontSize: 13, color: "#555", textAlign: "right" }}>
+      <div className="likert-row">
+        <span className="likert-label likert-label--start">
           全く当てはまらない
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+        <div className="likert-options">
           {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-            <label
-              key={n}
-              style={{
-                display: "inline-flex",
-                flexDirection: "column",
-                alignItems: "center",
-                fontSize: 13,
-              }}
-            >
+            <label key={n} className="likert-option">
               <input
                 type="radio"
                 name={name}
@@ -54,11 +38,11 @@ function Likert({
                 onChange={() => onChange(n)}
                 required
               />
-              <span style={{ marginTop: 2 }}>{n}</span>
+              <span>{n}</span>
             </label>
           ))}
         </div>
-        <span style={{ fontSize: 13, color: "#555", textAlign: "left" }}>
+        <span className="likert-label likert-label--end">
           とても当てはまる
         </span>
       </div>
@@ -89,13 +73,13 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
   return (
     <form onSubmit={submit} style={{ maxWidth: 1040 }}>
       <h2>Delayed Reader Survey</h2>
-      <p>
+      <p style={{ fontSize: 13 }}>
         {/* このアンケートでは、2週間前に読んだAIプロトタイピングプログラムの共有メモについて現在覚えている内容や、そのメモがあなたの考え方や業務に及ぼした影響についてお聞きします。 */}
         メモは再表示されません。覚えている範囲で回答してください。
       </p>
 
       <div style={{ marginTop: 32, marginBottom: 32 }}>
-        <label>
+        <label style={{ fontSize: 14 }}>
           2週間前に読んだメモに書かれていた内容として、覚えていることを最大3つまで書いてください。できるだけ具体的に、1つの欄につき1つの内容を短い文で書いてください。正確な表現を覚えている必要はなく、思い出せる範囲で構いません。無ければ空欄のままで構いません。
           <span style={{ color: "#6b7280", marginLeft: 4 }}>（任意）</span>
         </label>
@@ -123,7 +107,7 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
       />
 
       <div style={{ marginTop: 32 }}>
-        <label>
+        <label style={{ fontSize: 14 }}>
           変化があった場合、どのような点が変わりましたか？できるだけ具体的に教えてください。また、あまり変わっていない、またはまったく変わっていない場合は、その理由を教えてください。
           <span style={{ color: "#dc2626", marginLeft: 4 }}>*</span>
           <textarea
@@ -136,7 +120,7 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
       </div>
 
       <div style={{ marginTop: 32 }}>
-        <label>
+        <label style={{ fontSize: 14 }}>
           その他、コメントがあれば自由にご記入ください。
           <span style={{ color: "#6b7280", marginLeft: 4 }}>（任意）</span>
           <textarea
@@ -151,7 +135,7 @@ export default function ReaderDelayedSurvey({ onSubmit, loading, error }: Props)
       <button
         type="submit"
         disabled={loading || !allRequiredAnswered}
-        style={{ marginTop: 16, padding: "8px 16px" }}
+        style={{ marginTop: 32, padding: "8px 16px" }}
       >
         {loading ? "送信中..." : "アンケートを提出する"}
       </button>
